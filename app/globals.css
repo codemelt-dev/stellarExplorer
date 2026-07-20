@@ -1,0 +1,427 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens — DESIGN.md is the source of truth. Never invent ad-hoc colors.
+ * Dark-first product: :root IS the dark theme (light mode is post-MVP).
+ * DESIGN.md palette is mapped onto shadcn's semantic variables below.
+ */
+:root {
+  /* DESIGN.md raw palette */
+  --bg: #101214;
+  --surface: #191c1f;
+  --surface-2: #22262a;
+  --line: #2e3338;
+  --text-hi: #e8eaed;
+  --text-dim: #9aa0a6;
+  --gold: #ffd166;
+  --ok: #4ade80;
+  --fail: #f87171;
+  --contract: #a78bfa;
+
+  /* shadcn semantic mapping */
+  --background: var(--bg);
+  --foreground: var(--text-hi);
+  --card: var(--surface);
+  --card-foreground: var(--text-hi);
+  --popover: var(--surface-2);
+  --popover-foreground: var(--text-hi);
+  --primary: var(--gold);
+  --primary-foreground: #101214;
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--text-hi);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--text-dim);
+  --accent: var(--surface-2);
+  --accent-foreground: var(--text-hi);
+  --destructive: var(--fail);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--gold);
+  --chart-1: var(--gold);
+  --chart-2: var(--contract);
+  --chart-3: var(--ok);
+  --chart-4: var(--fail);
+  --chart-5: var(--text-dim);
+  --radius: 1rem;
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--text-hi);
+  --sidebar-primary: var(--gold);
+  --sidebar-primary-foreground: #101214;
+  --sidebar-accent: var(--surface-2);
+  --sidebar-accent-foreground: var(--text-hi);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--gold);
+}
+
+/* :root is the dark theme. .light overrides the raw palette; every shadcn
+   semantic var references these, so the whole app follows */
+.light {
+  --bg: #f5f4f1;
+  --surface: #fdfcfa;
+  --surface-2: #eceae4;
+  --line: #ddd9d0;
+  --text-hi: #1c1e21;
+  --text-dim: #64696f;
+  --gold: #96700a;
+  --ok: #15803d;
+  --fail: #dc2626;
+  --contract: #6d4fd0;
+  --primary-foreground: #fdfcfa;
+}
+
+.dark {
+  --background: var(--bg);
+}
+
+@theme inline {
+  /* Project utilities: bg-surface, text-dim, text-gold, text-ok, text-fail, text-contract */
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-dim: var(--text-dim);
+  --color-gold: var(--gold);
+  --color-ok: var(--ok);
+  --color-fail: var(--fail);
+  --color-contract: var(--contract);
+
+  --font-sans: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-data), ui-monospace, monospace;
+  --font-heading: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+
+  /* shadcn semantic colors */
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 14px;
+    line-height: 1.5;
+    /* ambient depth: faint warm light from the top, page isn't a flat sheet */
+    background-image:
+      radial-gradient(
+        1100px 480px at 50% -120px,
+        rgba(255, 209, 102, 0.045),
+        transparent 65%
+      ),
+      linear-gradient(180deg, #15171b 0%, var(--bg) 420px);
+    background-attachment: fixed;
+  }
+  .light body {
+    background-image:
+      radial-gradient(
+        1100px 480px at 50% -120px,
+        rgba(150, 112, 10, 0.06),
+        transparent 65%
+      ),
+      linear-gradient(180deg, #fbfaf7 0%, var(--bg) 420px);
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* liquid glass cards: translucent surface + backdrop blur, so the ambient
+   blobs drifting behind get frosted through them. Top edge catches light */
+[data-slot="card"] {
+  background-color: color-mix(in srgb, var(--surface) 76%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.03),
+    transparent 40%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 32px rgba(255, 255, 255, 0.015);
+}
+.light [data-slot="card"] {
+  background-color: color-mix(in srgb, var(--surface) 82%, transparent);
+  background-image: none;
+  box-shadow:
+    0 1px 2px rgba(20, 18, 12, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+/* ambient blobs: big soft color fields drifting slowly behind everything */
+.ambient-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.07;
+  animation: blob-drift 45s ease-in-out infinite alternate;
+}
+.blob-gold {
+  width: 540px;
+  height: 540px;
+  top: -8%;
+  left: -6%;
+  background: radial-gradient(circle, var(--gold), transparent 65%);
+}
+.blob-violet {
+  width: 640px;
+  height: 640px;
+  bottom: -18%;
+  right: -10%;
+  background: radial-gradient(circle, var(--contract), transparent 65%);
+  animation-duration: 60s;
+  animation-delay: -25s;
+}
+.blob-gold-2 {
+  width: 400px;
+  height: 400px;
+  top: 45%;
+  right: 18%;
+  opacity: 0.045;
+  background: radial-gradient(circle, var(--gold), transparent 65%);
+  animation-duration: 52s;
+  animation-delay: -40s;
+}
+.light .ambient-blob {
+  opacity: 0.05;
+}
+.light .blob-gold-2 {
+  opacity: 0.035;
+}
+
+@keyframes blob-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(70px, 45px, 0) scale(1.15);
+  }
+}
+
+/* starfield, dark theme only */
+.light .star-layer,
+.light .shooting-star {
+  display: none;
+}
+
+/* shooting stars: visible for ~1s of a long cycle, so they stay rare */
+.shooting-star {
+  position: absolute;
+  width: 130px;
+  height: 1px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgba(232, 234, 237, 0.65), transparent);
+  opacity: 0;
+}
+.star-a {
+  top: 14%;
+  left: 6%;
+  transform: rotate(32deg);
+  animation: shoot-a 21s linear infinite;
+  animation-delay: 5s;
+}
+.star-b {
+  top: 34%;
+  right: 30%;
+  transform: rotate(24deg);
+  animation: shoot-b 34s linear infinite;
+  animation-delay: 14s;
+}
+@keyframes shoot-a {
+  0% {
+    opacity: 0;
+    transform: rotate(32deg) translateX(0);
+  }
+  1% {
+    opacity: 0.6;
+  }
+  5.5% {
+    opacity: 0;
+    transform: rotate(32deg) translateX(44vw);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(32deg) translateX(44vw);
+  }
+}
+@keyframes shoot-b {
+  0% {
+    opacity: 0;
+    transform: rotate(24deg) translateX(0);
+  }
+  1% {
+    opacity: 0.5;
+  }
+  4.5% {
+    opacity: 0;
+    transform: rotate(24deg) translateX(38vw);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(24deg) translateX(38vw);
+  }
+}
+
+/* the aurora behind the hero pulse */
+.aurora {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  width: 560px;
+  height: 260px;
+  translate: -50% 0;
+  border-radius: 100%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 209, 102, 0.14),
+    transparent 70%
+  );
+  filter: blur(70px);
+  pointer-events: none;
+  animation: aurora-drift 16s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  from {
+    translate: -58% 0;
+    scale: 1;
+  }
+  to {
+    translate: -42% 8px;
+    scale: 1.12;
+  }
+}
+
+/* semantic glows */
+.glow-gold {
+  box-shadow: 0 0 16px -2px rgba(255, 209, 102, 0.45);
+}
+.glow-contract {
+  box-shadow: 0 0 10px -3px rgba(167, 139, 250, 0.35);
+}
+
+/* interactive bento tiles: border warms and the tile lifts a hair */
+.tile {
+  transition:
+    border-color 150ms ease-out,
+    translate 150ms ease-out;
+}
+.tile:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  translate: 0 -1px;
+}
+.light .tile:hover {
+  border-color: rgba(28, 30, 33, 0.22);
+}
+.light .aurora {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(150, 112, 10, 0.12),
+    transparent 70%
+  );
+}
+
+/* Data face: tabular numbers so amounts align in columns */
+.font-mono,
+code,
+pre {
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--gold) 30%, transparent);
+}
+
+/* Visible keyboard focus everywhere */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* The full animation budget: ledger pulse, feed slide-ins, copy tick, raw
+   toggles. Nothing else animates. */
+@keyframes ledger-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes ledger-tick {
+  0% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* new feed rows unfold to their real height instead of popping in.
+   Use on a single-row grid wrapper; the inner element needs min-h-0 + overflow-hidden */
+@keyframes row-in {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+
+@theme inline {
+  --animate-ledger-tick: ledger-tick 300ms ease-out;
+  --animate-row-in: row-in 300ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
