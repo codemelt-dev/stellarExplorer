@@ -11,10 +11,31 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Identicon } from "@/components/stellar/Identicon";
 import { truncateKey } from "@/lib/stellar/strkey";
+import { getClientNetwork } from "@/lib/stellar/clientConfig";
 
 const STORAGE_KEY = "wallet_address";
 
-// Freighter connect. Multi-wallet kit + the account dashboard come later
+let kitReady = false;
+
+// kit is browser-only and heavy, load it on first click
+async function loadKit() {
+  const [{ StellarWalletsKit, Networks }, freighter, xbull] = await Promise.all([
+    import("@creit.tech/stellar-wallets-kit"),
+    import("@creit.tech/stellar-wallets-kit/modules/freighter"),
+    import("@creit.tech/stellar-wallets-kit/modules/xbull"),
+  ]);
+  if (!kitReady) {
+    StellarWalletsKit.init({
+      modules: [new freighter.FreighterModule(), new xbull.xBullModule()],
+      network:
+        getClientNetwork().id === "mainnet" ? Networks.PUBLIC : Networks.TESTNET,
+    });
+    kitReady = true;
+  }
+  return StellarWalletsKit;
+}
+
+// wallet connect via Stellar Wallets Kit (Freighter + xBull)
 export function WalletButton() {
   const [address, setAddress] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -26,27 +47,28 @@ export function WalletButton() {
   async function connect() {
     setBusy(true);
     try {
-      const freighter = await import("@stellar/freighter-api");
-      const connected = await freighter.isConnected();
-      if (!connected.isConnected) {
-        window.open("https://www.freighter.app/", "_blank", "noopener");
-        return;
-      }
-      const access = await freighter.requestAccess();
-      if (access.address) {
-        localStorage.setItem(STORAGE_KEY, access.address);
-        setAddress(access.address);
+      const kit = await loadKit();
+      const { address } = await kit.authModal();
+      if (address) {
+        localStorage.setItem(STORAGE_KEY, address);
+        setAddress(address);
       }
     } catch {
-      // user rejected or extension unavailable, nothing to do
+      // user closed the modal or rejected, nothing to do
     } finally {
       setBusy(false);
     }
   }
 
-  function disconnect() {
+  async function disconnect() {
     localStorage.removeItem(STORAGE_KEY);
     setAddress(null);
+    if (kitReady) {
+      const { StellarWalletsKit } = await import(
+        "@creit.tech/stellar-wallets-kit"
+      );
+      StellarWalletsKit.disconnect().catch(() => {});
+    }
   }
 
   if (!address) {
