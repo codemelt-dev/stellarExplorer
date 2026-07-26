@@ -5,6 +5,8 @@ import { Amount } from "@/components/stellar/Amount";
 import { EmptyState } from "@/components/states/EmptyState";
 import { stroopsToLumens } from "@/lib/stellar/amount";
 import type { EffectRecord } from "@/lib/stellar/transactions";
+import type { TokenMovement } from "@/lib/stellar/xdrDecode";
+import { truncateKey } from "@/lib/stellar/strkey";
 import { cn } from "@/lib/utils";
 
 type AnyEffect = EffectRecord & Record<string, unknown>;
@@ -124,18 +126,41 @@ function toRows(effects: EffectRecord[]): ChangeRow[] {
   return rows;
 }
 
+const MOVEMENT_LABEL: Record<
+  TokenMovement["kind"],
+  { in: string; out: string }
+> = {
+  transfer: { in: "received", out: "sent" },
+  mint: { in: "minted", out: "minted" },
+  burn: { in: "burned", out: "burned" },
+  clawback: { in: "clawed back", out: "clawed back" },
+};
+
+// SAC / token movements decoded from contract events (Horizon effects omit them)
+function movementRows(movements: TokenMovement[]): ChangeRow[] {
+  return movements.map((m) => ({
+    account: m.account,
+    direction: m.direction,
+    label: MOVEMENT_LABEL[m.kind][m.direction],
+    amount: stroopsToLumens(m.amount),
+    assetCode: truncateKey(m.token, 4),
+  }));
+}
+
 export function BalanceChanges({
   effects,
+  sorobanMovements = [],
   feeCharged,
   feeAccount,
   successful,
 }: {
   effects: EffectRecord[];
+  sorobanMovements?: TokenMovement[];
   feeCharged: string;
   feeAccount: string;
   successful: boolean;
 }) {
-  const rows = toRows(effects);
+  const rows = [...toRows(effects), ...movementRows(sorobanMovements)];
 
   return (
     <Card className="gap-3 p-5">

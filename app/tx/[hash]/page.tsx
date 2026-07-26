@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import { SearchX } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { VerdictBanner } from "@/components/tx/VerdictBanner";
 import { OpCard } from "@/components/tx/OpCard";
 import { Address } from "@/components/stellar/Address";
 import { Time } from "@/components/stellar/Time";
 import { Amount } from "@/components/stellar/Amount";
 import { RawPanel } from "@/components/stellar/RawPanel";
-import { ScValView } from "@/components/stellar/ScValView";
+import { ContractEvents } from "@/components/tx/ContractEvents";
 import { CopyButton } from "@/components/stellar/CopyButton";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
@@ -29,6 +28,7 @@ import {
   parsePreconditions,
   parseSorobanInvocation,
   parseSorobanResources,
+  sorobanTokenMovements,
 } from "@/lib/stellar/xdrDecode";
 import { BalanceChanges } from "@/components/tx/BalanceChanges";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -95,6 +95,7 @@ export default async function TransactionPage({
     (hasSorobanOp ? ((await getTransactionMetaXdr(tx.hash)) ?? undefined) : undefined);
   const returnValue = getSorobanReturnValue(resultMetaXdr);
   const events = getSorobanEvents(resultMetaXdr);
+  const tokenMovements = sorobanTokenMovements(events);
   const memo = memoDisplay(tx.memo_type, tx.memo);
   const feeBump = record["fee_bump_transaction"] as
     | { hash: string }
@@ -332,42 +333,13 @@ export default async function TransactionPage({
       </section>
 
       {/* Contract events */}
-      {events.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-lg font-semibold">
-            {events.length} contract event{events.length === 1 ? "" : "s"}
-          </h2>
-          <Card className="gap-4 p-5">
-            {events.map((event, i) => (
-              <div key={i} className="flex flex-col gap-1.5">
-                {i > 0 && <Separator className="mb-2" />}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs text-dim">#{i}</span>
-                  {event.contractId && <Address address={event.contractId} />}
-                  <span className="flex flex-wrap gap-1">
-                    {event.topics.map((topic, j) => (
-                      <span
-                        key={j}
-                        className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-contract"
-                      >
-                        <ScValView value={topic} />
-                      </span>
-                    ))}
-                  </span>
-                </div>
-                <div className="pl-6">
-                  <ScValView value={event.data} />
-                </div>
-              </div>
-            ))}
-          </Card>
-        </section>
-      )}
+      {events.length > 0 && <ContractEvents events={events} />}
         </TabsContent>
 
         <TabsContent value="balances" className="mt-4">
           <BalanceChanges
             effects={effects}
+            sorobanMovements={tokenMovements}
             feeCharged={String(tx.fee_charged)}
             feeAccount={feeAccount}
             successful={tx.successful}

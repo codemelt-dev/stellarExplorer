@@ -157,11 +157,12 @@ export function getSorobanEvents(
     if (meta.switch() === 3) {
       events = meta.v3().sorobanMeta()?.events() ?? [];
     } else if (meta.switch() === 4) {
-      events =
-        meta
-          .v4()
-          .events()
-          ?.map((e) => e.event()) ?? [];
+      // v4 splits events: the real contract events (transfer, mint, ...) live
+      // per-operation; events() holds only tx-level fee events. Gather both.
+      const v4 = meta.v4();
+      const opEvents = v4.operations().flatMap((o) => o.events());
+      const txEvents = v4.events().map((e) => e.event());
+      events = [...opEvents, ...txEvents];
     }
     return events.map((event) => {
       let contractId: string | null = null;
@@ -197,6 +198,80 @@ export function getSorobanEvents(
   } catch {
     return [];
   }
+}
+
+export interface TokenMovement {
+  account: string;
+  direction: "in" | "out";
+  /** raw base units (i128); displayed as a 7-decimal token, the SAC standard. */
+  amount: string;
+  /** the token contract id. */
+  token: string;
+  kind: "transfer" | "mint" | "burn" | "clawback";
+}
+
+export interface TokenEventDescription {
+  kind: "transfer" | "mint" | "burn" | "clawback";
+  token: string;
+  from?: string;
+  to?: string;
+  /** raw base units (i128). */
+  amount: string;
+}
+
+function scalarText(v: DecodedValue | undefined): string | null {
+  return v && v.kind === "scalar" ? v.text : null;
+}
+
+// SEP-41 / Stellar Asset Contract token event -> a readable {from, to, amount}.
+// Returns null for anything that is not a recognized token event (fee, custom
+// events, ...), so the raw topic/data view stays the fallback.
+export function describeTokenEvent(
+  event: DecodedContractEvent,
+): TokenEventDescription | null {
+  if (!event.contractId) return null;
+  const name = scalarText(event.topics[0]);
+  const amount = scalarText(event.data);
+  if (!name || amount === null || !/^-?\d+$/.test(amount)) return null;
+  const token = event.contractId;
+  const addrs = event.topics
+    .slice(1)
+    .filter((t) => t.kind === "scalar" && t.hint === "address")
+    .map((t) => (t as Extract<DecodedValue, { kind: "scalar" }>).text);
+  switch (name) {
+    case "transfer": // topics: transfer, from, to
+      if (addrs.length < 2) return null;
+      return { kind: "transfer", token, from: addrs[0], to: addrs[1], amount };
+    case "mint": // mint, [admin], to
+      if (!addrs.length) return null;
+      return { kind: "mint", token, to: addrs[addrs.length - 1], amount };
+    case "burn": // burn, from
+      if (!addrs.length) return null;
+      return { kind: "burn", token, from: addrs[0], amount };
+    case "clawback": // clawback, [admin], from
+      if (!addrs.length) return null;
+      return { kind: "clawback", token, from: addrs[addrs.length - 1], amount };
+    default:
+      return null;
+  }
+}
+
+// Token events -> per-account balance movements for the Effects tab. Horizon
+// effects don't include these, so without this a contract transfer shows
+// nothing but the network fee.
+export function sorobanTokenMovements(
+  events: DecodedContractEvent[],
+): TokenMovement[] {
+  const movements: TokenMovement[] = [];
+  for (const event of events) {
+    const d = describeTokenEvent(event);
+    if (!d) continue;
+    if (d.from)
+      movements.push({ account: d.from, direction: "out", amount: d.amount, token: d.token, kind: d.kind });
+    if (d.to)
+      movements.push({ account: d.to, direction: "in", amount: d.amount, token: d.token, kind: d.kind });
+  }
+  return movements;
 }
 
 /** "paymentUnderfunded" -> "payment underfunded" */
