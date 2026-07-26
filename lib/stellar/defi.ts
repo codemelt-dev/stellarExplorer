@@ -5,7 +5,7 @@ import "server-only";
 
 const LLAMA = "https://api.llama.fi";
 const EXPERT = "https://api.stellar.expert/explorer/public";
-const UA = { "User-Agent": "stellar-pulse-explorer" };
+const UA = { "User-Agent": "astrolabe-explorer" };
 
 // tracked protocols, slugs verified against DefiLlama
 export const PROTOCOLS = [

@@ -26,7 +26,7 @@ export async function getNetworkGrowth(): Promise<NetworkGrowthData | null> {
     const res = await fetch(
       "https://api.stellar.expert/explorer/public/ledger/ledger-stats",
       {
-        headers: { "User-Agent": "stellar-pulse-explorer" },
+        headers: { "User-Agent": "astrolabe-explorer" },
         next: { revalidate: 3600 },
       },
     );

@@ -18,7 +18,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Stellar Explorer",
+  title: "Astrolabe · Stellar Explorer",
   description:
     "A live, human-readable explorer for the Stellar network. Decoded by default, raw on demand.",
 };
