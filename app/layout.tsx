@@ -18,9 +18,24 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://stellar-explorer-tau.vercel.app"),
   title: "Astrolabe · Stellar Explorer",
   description:
     "A live, human-readable explorer for the Stellar network. Decoded by default, raw on demand.",
+  openGraph: {
+    title: "Astrolabe · Stellar Explorer",
+    description:
+      "A live, human-readable explorer for the Stellar network. Decoded by default, raw on demand.",
+    url: "/",
+    siteName: "Astrolabe",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Astrolabe · Stellar Explorer",
+    description:
+      "A live, human-readable explorer for the Stellar network. Decoded by default, raw on demand.",
+  },
 };
 
 export default function RootLayout({
