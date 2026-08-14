@@ -36,13 +36,13 @@ The MVP is a single Next.js app reading public endpoints. That is the ceiling th
 
 ```
 astrolabe-web        Next.js frontend (this repo, renamed)
-astrolabe-api        Hono on Bun, public REST API and internal aggregates
-astrolabe-indexer    captive-core ledger ingestion and history backfill
+astrolabe-api        NestJS, public REST API and internal aggregates
+astrolabe-indexer    Galexie ledger ingestion and history backfill
 ```
 
 - **Frontend:** stays Next.js. Pages keep the same components; only the data layer swaps from public endpoints to our API.
-- **Backend:** Hono running on Bun. Lightweight, fast startup, TypeScript end to end, and the same runtime we already build with.
-- **Database:** PostgreSQL as the system of record for entities (accounts, assets, contracts, verification metadata, alert subscriptions) and analytics tables.
+- **Backend:** NestJS with TypeScript, sharing @stellar/stellar-sdk decoding with the indexer.
+- **Database:** PostgreSQL as the system of record for entities (accounts, assets, contracts, verification metadata, alert subscriptions), ClickHouse for append-heavy analytics tables.
 - **Data ownership:** ledger data flows from captive-core into our own database. Horizon is an interim bridge only; the funded indexer removes it along with the aggregator dependencies.
 
 Milestones, budgets and acceptance criteria live in the [docs](https://codemelt.gitbook.io/astrolabe-docs).
