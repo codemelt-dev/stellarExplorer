@@ -1,22 +1,17 @@
 import "server-only";
+import { horizonFor } from "./horizon";
+import { getNetwork } from "./config";
+import { PROTOCOLS, protocolLogo } from "./protocols";
 
-// mainnet DeFi data from two public sources, no keys. Everything is
+// mainnet DeFi data from public sources, no keys. Everything is
 // edge-cached via fetch revalidate so we never hammer the APIs
 
 const LLAMA = "https://api.llama.fi";
 const EXPERT = "https://api.stellar.expert/explorer/public";
 const UA = { "User-Agent": "astrolabe-explorer" };
 
-// tracked protocols, slugs verified against DefiLlama
-export const PROTOCOLS = [
-  { slug: "blend", name: "Blend", kind: "Lending" },
-  { slug: "aquarius-stellar", name: "Aquarius", kind: "AMM" },
-  { slug: "stellar-dex", name: "Stellar DEX", kind: "Orderbook DEX" },
-  { slug: "lumenswap", name: "LumenSwap", kind: "DEX" },
-  { slug: "balanced-exchange", name: "Balanced", kind: "Exchange" },
-  { slug: "soroswap", name: "Soroswap", kind: "AMM" },
-  { slug: "phoenix-defi-hub", name: "Phoenix", kind: "AMM" },
-];
+export { PROTOCOLS };
+
 
 async function getJson<T>(
   url: string,
@@ -81,7 +76,7 @@ export async function getProtocols(): Promise<ProtocolRow[]> {
       slug: p.slug,
       name: p.name,
       kind: p.kind,
-      logo: `https://icons.llamao.fi/icons/protocols/${p.slug}?w=48&h=48`,
+      logo: protocolLogo(p.slug),
       tvl: typeof tvls[i] === "number" ? tvls[i] : null,
       volume24h: typeof dex?.total24h === "number" ? dex.total24h : null,
       change1d: typeof dex?.change_1d === "number" ? dex.change_1d : null,
@@ -176,7 +171,7 @@ export async function getProtocolDetail(
     slug,
     name: meta.name,
     kind: meta.kind,
-    logo: `https://icons.llamao.fi/icons/protocols/${slug}?w=96&h=96`,
+    logo: protocolLogo(slug, 96),
     description: data?.description ?? null,
     website: data?.url ?? null,
     currentTvl: tvlHistory[tvlHistory.length - 1]?.tvl ?? null,
@@ -254,7 +249,7 @@ export async function getChainTvlWithBreakdown(): Promise<{
           (breakdown[key] ??= []).push({
             slug: p.slug,
             name: p.name,
-            logo: `https://icons.llamao.fi/icons/protocols/${p.slug}?w=48&h=48`,
+            logo: protocolLogo(p.slug),
             tvl,
           });
         }
@@ -265,4 +260,54 @@ export async function getChainTvlWithBreakdown(): Promise<{
     }
   }
   return { points, breakdown };
+}
+
+export interface DexTrade {
+  id: string;
+  closedAt: string;
+  account: string | null;
+  poolId: string | null;
+  baseAmount: string;
+  baseCode: string;
+  baseIssuer?: string;
+  counterAmount: string;
+  counterCode: string;
+  counterIssuer?: string;
+  price: number;
+  venue: "orderbook" | "pool";
+}
+
+// latest classic DEX fills (orderbook + liquidity pools), always mainnet
+export async function getDexTrades(limit = 25): Promise<DexTrade[] | null> {
+  try {
+    const page = await horizonFor(getNetwork("mainnet").horizonUrl)
+      .trades()
+      .order("desc")
+      .limit(limit)
+      .call();
+    return page.records.map((r) => {
+      const t = r as typeof r & Record<string, unknown>;
+      const code = (type: unknown, c: unknown) =>
+        type === "native" ? "XLM" : String(c ?? "?");
+      const issuer = (type: unknown, i: unknown) =>
+        type === "native" ? undefined : (i as string | undefined);
+      const price = t.price as { n: string | number; d: string | number } | undefined;
+      return {
+        id: String(t.id),
+        closedAt: String(t.ledger_close_time),
+        account: (t.base_account ?? t.counter_account ?? null) as string | null,
+        poolId: (t.base_liquidity_pool_id ?? t.counter_liquidity_pool_id ?? null) as string | null,
+        baseAmount: String(t.base_amount),
+        baseCode: code(t.base_asset_type, t.base_asset_code),
+        baseIssuer: issuer(t.base_asset_type, t.base_asset_issuer),
+        counterAmount: String(t.counter_amount),
+        counterCode: code(t.counter_asset_type, t.counter_asset_code),
+        counterIssuer: issuer(t.counter_asset_type, t.counter_asset_issuer),
+        price: price ? Number(price.n) / Number(price.d) : 0,
+        venue: t.trade_type === "liquidity_pool" ? "pool" : "orderbook",
+      };
+    });
+  } catch {
+    return null;
+  }
 }

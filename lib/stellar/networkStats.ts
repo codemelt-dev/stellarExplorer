@@ -21,7 +21,13 @@ export interface NetworkGrowthData {
   newAssets: DailyPoint[];
 }
 
-export async function getNetworkGrowth(): Promise<NetworkGrowthData | null> {
+export interface AccountTotals {
+  total: number;
+  newLastDay: number;
+}
+
+// same URL + options everywhere so Next dedupes it into one cached fetch
+async function fetchLedgerStats(): Promise<LedgerStatDay[] | null> {
   try {
     const res = await fetch(
       "https://api.stellar.expert/explorer/public/ledger/ledger-stats",
@@ -31,8 +37,27 @@ export async function getNetworkGrowth(): Promise<NetworkGrowthData | null> {
       },
     );
     if (!res.ok) return null;
-    const days = (await res.json()) as LedgerStatDay[];
-    if (days.length < 2) return null;
+    return (await res.json()) as LedgerStatDay[];
+  } catch {
+    return null;
+  }
+}
+
+export async function getAccountTotals(): Promise<AccountTotals | null> {
+  const days = await fetchLedgerStats();
+  if (!days || days.length < 2) return null;
+  const last = days[days.length - 1];
+  const prev = days[days.length - 2];
+  return {
+    total: last.accounts,
+    newLastDay: Math.max(0, last.accounts - prev.accounts),
+  };
+}
+
+export async function getNetworkGrowth(): Promise<NetworkGrowthData | null> {
+  try {
+    const days = await fetchLedgerStats();
+    if (!days || days.length < 2) return null;
 
     const recent = days.slice(-91);
     const newAccounts: DailyPoint[] = [];

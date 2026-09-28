@@ -4,6 +4,7 @@ import { NetworkSwitcher } from "./NetworkSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
 import { WalletButton } from "./WalletButton";
 import { HeaderPulse } from "@/components/live/LedgerPulse";
+import { MainNav } from "./MainNav";
 
 export function Header() {
   return (
@@ -19,13 +20,13 @@ export function Header() {
           </span>
           <span className="text-base font-bold tracking-tight">
             Astro
-            <span className="bg-[linear-gradient(100deg,var(--gold)_20%,#ffe9b8_50%,var(--gold)_80%)] bg-clip-text text-transparent [filter:drop-shadow(0_0_10px_rgba(255,209,102,0.3))]">
-              labe
-            </span>
+            <span className="text-gold">labe</span>
           </span>
         </Link>
 
-        <SearchBox className="order-last w-full sm:order-none sm:w-auto sm:flex-1 sm:max-w-xl" />
+        <MainNav className="-ml-2 hidden lg:flex" />
+
+        <SearchBox className="order-last w-full sm:order-none sm:w-auto sm:flex-1 sm:max-w-md" />
 
         <span className="ml-auto flex shrink-0 items-center gap-2.5">
           <HeaderPulse />
@@ -33,6 +34,8 @@ export function Header() {
           <WalletButton />
           <ThemeToggle />
         </span>
+
+        <MainNav className="order-last -mx-2.5 w-full overflow-x-auto lg:hidden" />
       </div>
     </header>
   );

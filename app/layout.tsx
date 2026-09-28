@@ -1,11 +1,10 @@
+import { Header } from "@/components/layout/Header";
+import { LegendFlyout } from "@/components/layout/LegendFlyout";
+import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
 import { Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
-import { Header } from "@/components/layout/Header";
-import { LegendFlyout } from "@/components/layout/LegendFlyout";
-import { AmbientBackground } from "@/components/layout/AmbientBackground";
-import { cn } from "@/lib/utils";
 
 const instrumentSans = Instrument_Sans({
   variable: "--font-ui",
@@ -54,7 +53,6 @@ export default function RootLayout({
       )}
     >
       <body className="min-h-full flex flex-col">
-        <AmbientBackground />
         <Providers>
           <Header />
           <main className="mx-auto w-full max-w-300 flex-1 px-4 py-6 sm:px-6">

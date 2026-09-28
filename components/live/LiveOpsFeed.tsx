@@ -14,6 +14,7 @@ import type { OperationRecord } from "@/lib/stellar/transactions";
 import { getClientNetwork } from "@/lib/stellar/clientConfig";
 import { cn } from "@/lib/utils";
 import { XCircle } from "lucide-react";
+import { LIST_REFRESH_MS } from "./cadence";
 
 const MAX_ROWS = 60; // keep a deeper buffer so filters have material
 const VISIBLE_ROWS = 14;
@@ -56,8 +57,8 @@ export function LiveOpsFeed() {
         if (!cancelled) setFailed(true);
       });
 
-    // ops arrive in bursts when a ledger closes. Buffer everything and flush
-    // once per interval so the list reflows once, not ten times in a row
+    // buffer the stream and flush every few ledgers, so rows hold still
+    // long enough to read
     const source = new EventSource(
       `${horizonUrl}/operations?cursor=now&include_failed=true`,
     );
@@ -75,7 +76,7 @@ export function LiveOpsFeed() {
       const buffered = bufferRef.current;
       bufferRef.current = [];
       push(buffered);
-    }, 900);
+    }, LIST_REFRESH_MS);
 
     return () => {
       cancelled = true;
@@ -100,7 +101,15 @@ export function LiveOpsFeed() {
   return (
     <Card className="tile gap-3 p-5" onMouseEnter={pause} onMouseLeave={resume}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">Live operations</h2>
+        <span className="flex items-baseline gap-3">
+          <h2 className="text-base font-semibold">Live operations</h2>
+          <Link
+            href="/transactions"
+            className="rounded-sm text-xs text-dim transition-colors duration-150 hover:text-foreground"
+          >
+            All transactions
+          </Link>
+        </span>
         <div className="flex items-center gap-3">
           <nav className="flex gap-1" aria-label="Live feed filter">
             {FILTERS.map((f) => (

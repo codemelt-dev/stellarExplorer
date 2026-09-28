@@ -9,11 +9,13 @@ export function ClickableRow({
   className,
   children,
   as = "tr",
+  label = "Open transaction",
 }: {
   href: string;
   className?: string;
   children: React.ReactNode;
   as?: "tr" | "div";
+  label?: string;
 }) {
   const router = useRouter();
 
@@ -37,7 +39,7 @@ export function ClickableRow({
       onKeyDown={onKeyDown}
       tabIndex={0}
       role="link"
-      aria-label="Open transaction"
+      aria-label={label}
       className={cn(
         "cursor-pointer transition-colors duration-150 hover:bg-surface-2/40 active:bg-surface-2/70",
         className,

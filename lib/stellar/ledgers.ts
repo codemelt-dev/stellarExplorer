@@ -41,3 +41,37 @@ export const getLedgerTransactions = cache(
     }
   },
 );
+
+export interface LedgerRow {
+  sequence: number;
+  hash: string;
+  closedAt: string;
+  txOk: number;
+  txFailed: number;
+  opCount: number;
+  baseFeeStroops: number;
+  pagingToken: string;
+}
+
+/** Newest ledgers first. `cursor` = paging token of the last row seen, for older pages. */
+export async function getRecentLedgers(cursor?: string, limit = 25): Promise<LedgerRow[]> {
+  let call = (await horizon()).ledgers().order("desc").limit(limit);
+  if (cursor) call = call.cursor(cursor);
+  const page = await call.call();
+  return page.records.map((r) => {
+    const l = r as typeof r & {
+      successful_transaction_count?: number;
+      failed_transaction_count?: number;
+    };
+    return {
+      sequence: l.sequence,
+      hash: l.hash,
+      closedAt: l.closed_at,
+      txOk: l.successful_transaction_count ?? 0,
+      txFailed: l.failed_transaction_count ?? 0,
+      opCount: l.operation_count,
+      baseFeeStroops: l.base_fee_in_stroops,
+      pagingToken: l.paging_token,
+    };
+  });
+}
