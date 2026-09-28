@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { SearchBox } from "@/components/layout/SearchBox";
 import { LedgerPulse } from "@/components/live/LedgerPulse";
 import { StatsRow } from "@/components/live/StatsRow";
+import { StatsRowServer } from "@/components/live/StatsRowServer";
 import { ActivityChart } from "@/components/live/ActivityChart";
 import { LedgerTicker } from "@/components/live/LedgerTicker";
 import { LiveOpsFeed } from "@/components/live/LiveOpsFeed";
@@ -14,13 +15,12 @@ export const revalidate = 900;
 
 export default function Home() {
   return (
-    <div className="flex flex-col gap-6">
-      <section className="relative flex flex-col items-center gap-6 pt-10 pb-4 sm:pt-14">
-        <div className="aurora" aria-hidden="true" />
+    <div className="flex flex-col gap-5">
+      <section className="flex flex-col items-center gap-5 pt-6 pb-2 sm:pt-10">
         <div className="flex flex-col items-center gap-2 text-center">
           <h1 className="text-3xl font-bold tracking-tight sm:text-5xl">
             Your go-to explorer{" "}
-            <span className="bg-[linear-gradient(100deg,var(--gold)_20%,#ffe9b8_50%,var(--gold)_80%)] bg-clip-text text-transparent [filter:drop-shadow(0_0_18px_rgba(255,209,102,0.25))]">
+            <span className="text-gold">
               on Stellar
             </span>
           </h1>
@@ -32,13 +32,19 @@ export default function Home() {
         <SearchBox large className="w-full max-w-xl" />
       </section>
 
-      <StatsRow />
+      <Suspense fallback={<StatsRow />}>
+        <StatsRowServer />
+      </Suspense>
 
       <ActivityChart />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        <LedgerTicker />
-        <LiveOpsFeed />
+        <section id="ledgers" className="flex scroll-mt-20 flex-col *:flex-1">
+          <LedgerTicker />
+        </section>
+        <section id="operations" className="flex scroll-mt-20 flex-col *:flex-1">
+          <LiveOpsFeed />
+        </section>
       </div>
 
       <Suspense
@@ -53,7 +59,9 @@ export default function Home() {
           </div>
         }
       >
-        <DefiSection />
+        <section id="defi" className="scroll-mt-20">
+          <DefiSection />
+        </section>
       </Suspense>
 
       <Suspense
@@ -64,7 +72,9 @@ export default function Home() {
           </div>
         }
       >
-        <NetworkGrowth />
+        <section id="network" className="scroll-mt-20">
+          <NetworkGrowth />
+        </section>
       </Suspense>
     </div>
   );

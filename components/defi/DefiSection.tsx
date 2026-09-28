@@ -13,6 +13,7 @@ import {
 } from "@/lib/stellar/defi";
 import { compactNumber, compactUsd, formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { truncateKey } from "@/lib/stellar/strkey";
 
 export async function DefiSection() {
   const [{ points: history, breakdown }, protocols, tokens] = await Promise.all([
@@ -40,7 +41,7 @@ export async function DefiSection() {
           <div className="flex items-baseline gap-3">
             <h3 className="text-base font-semibold">Total value locked</h3>
             {currentTvl && (
-              <span className="font-mono text-2xl font-semibold">
+              <span className="text-2xl font-semibold tabular-nums tracking-tight">
                 {compactUsd(currentTvl)}
               </span>
             )}
@@ -78,8 +79,12 @@ export async function DefiSection() {
                   <span className="flex min-w-0 items-center gap-2.5">
                     <TokenIcon image={t.image} issuer={t.issuer} code={t.code} />
                     <span className="min-w-0">
-                      <span className="block font-mono text-sm leading-tight">
-                        {t.code}
+                      <span
+                        className="block max-w-[16ch] truncate font-mono text-sm leading-tight"
+                        title={t.code}
+                      >
+                        {/* contract tokens come back with a C... id as their code */}
+                        {t.code.length > 16 ? truncateKey(t.code, 7) : t.code}
                       </span>
                       <span className="block truncate text-xs leading-tight text-dim">
                         {t.org}

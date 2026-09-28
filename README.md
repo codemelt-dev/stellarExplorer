@@ -4,9 +4,6 @@ A human-first block explorer for the Stellar network.
 
 **Decoded by default, raw on demand.** Every transaction, operation and contract call renders as a plain-language sentence, with raw XDR one toggle away for developers.
 
-- **Live demo:** https://stellar-explorer-tau.vercel.app
-- **Docs and grant application:** https://codemelt.gitbook.io/astrolabe-docs
-
 ## What the MVP does today
 
 Built self-funded against public endpoints (Horizon, Stellar RPC), running on testnet by default with a network switcher.
@@ -45,8 +42,6 @@ astrolabe-indexer    Galexie ledger ingestion and history backfill
 - **Database:** PostgreSQL as the system of record for entities (accounts, assets, contracts, verification metadata, alert subscriptions), ClickHouse for append-heavy analytics tables.
 - **Data ownership:** ledger data flows from captive-core into our own database. Horizon is an interim bridge only; the funded indexer removes it along with the aggregator dependencies.
 
-Milestones, budgets and acceptance criteria live in the [docs](https://codemelt.gitbook.io/astrolabe-docs).
-
 ## Running locally
 
 ```bash
@@ -72,5 +67,3 @@ bun run build   # production build
 - Soroban events are limited to the recent public RPC window
 - Federation resolution and dedicated asset pages are on the roadmap
 - Full history and analytics need the funded indexer
-
-See the [limitations page](https://codemelt.gitbook.io/astrolabe-docs/technical-architecture/limitations) for the complete list.

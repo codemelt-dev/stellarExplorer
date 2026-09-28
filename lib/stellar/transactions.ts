@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { Horizon } from "@stellar/stellar-sdk";
+import { Horizon, xdr } from "@stellar/stellar-sdk";
 import { horizon } from "./horizon";
 
 export type TransactionRecord = Horizon.ServerApi.TransactionRecord;
@@ -69,3 +69,52 @@ export const getTransactionOperations = cache(
     }
   },
 );
+
+export interface TxRow {
+  hash: string;
+  ledger: number;
+  createdAt: string;
+  source: string;
+  feeStroops: string;
+  opCount: number;
+  /** Horizon-style snake_case op types, decoded from the envelope. */
+  opTypes: string[];
+  successful: boolean;
+  pagingToken: string;
+}
+
+// envelope op bodies are camelCase ("invokeHostFunction"), Horizon uses snake_case
+function envelopeOpTypes(envelopeXdr: string): string[] {
+  try {
+    const env = xdr.TransactionEnvelope.fromXDR(envelopeXdr, "base64");
+    const tx =
+      env.switch() === xdr.EnvelopeType.envelopeTypeTxFeeBump()
+        ? env.feeBump().tx().innerTx().v1().tx()
+        : env.switch() === xdr.EnvelopeType.envelopeTypeTxV0()
+          ? env.v0().tx()
+          : env.v1().tx();
+    return tx
+      .operations()
+      .map((op) => op.body().switch().name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`));
+  } catch {
+    return [];
+  }
+}
+
+/** Newest transactions first, failed included. `cursor` pages to older ones. */
+export async function getRecentTransactions(cursor?: string, limit = 25): Promise<TxRow[]> {
+  let call = (await horizon()).transactions().order("desc").limit(limit).includeFailed(true);
+  if (cursor) call = call.cursor(cursor);
+  const page = await call.call();
+  return page.records.map((r) => ({
+    hash: r.hash,
+    ledger: r.ledger_attr,
+    createdAt: r.created_at,
+    source: r.source_account,
+    feeStroops: String(r.fee_charged),
+    opCount: r.operation_count,
+    opTypes: envelopeOpTypes(r.envelope_xdr),
+    successful: r.successful,
+    pagingToken: r.paging_token,
+  }));
+}

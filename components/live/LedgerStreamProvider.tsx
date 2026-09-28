@@ -17,6 +17,8 @@ export interface LedgerLite {
   opCount: number;
   baseFeeStroops: number;
   protocol: number;
+  /** XLM collected in fees, burned into the pool. */
+  feePool: number;
 }
 
 export type StreamStatus = "connecting" | "live" | "error";
@@ -47,6 +49,7 @@ function toLite(record: any): LedgerLite {
     opCount: record.operation_count ?? 0,
     baseFeeStroops: record.base_fee_in_stroops ?? 100,
     protocol: record.protocol_version ?? 0,
+    feePool: Number(record.fee_pool ?? 0),
   };
 }
 
