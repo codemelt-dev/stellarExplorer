@@ -8,6 +8,7 @@ export default function TransactionsLoading() {
         <Skeleton className="h-7 w-40" />
         <Skeleton className="h-4 w-72" />
       </div>
+      <Skeleton className="h-10 w-full rounded-lg sm:w-96" />
       <Card className="gap-0 p-4">
         {Array.from({ length: 12 }).map((_, i) => (
           <Skeleton key={i} className="my-2 h-7 w-full" />

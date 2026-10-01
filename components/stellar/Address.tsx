@@ -8,11 +8,14 @@ import { cn } from "@/lib/utils";
 export function Address({
   address,
   link = true,
+  copy = true,
   chars = 4,
   className,
 }: {
   address: string;
   link?: boolean;
+  /** Dense tables turn this off to save width; detail pages keep it. */
+  copy?: boolean;
   chars?: number;
   className?: string;
 }) {
@@ -58,7 +61,7 @@ export function Address({
       ) : (
         key
       )}
-      <CopyButton value={address} label="Copy address" />
+      {copy && <CopyButton value={address} label="Copy address" />}
     </span>
   );
 }

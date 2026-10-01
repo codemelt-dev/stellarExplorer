@@ -50,6 +50,7 @@ export interface LedgerRow {
   txFailed: number;
   opCount: number;
   baseFeeStroops: number;
+  protocol: number;
   pagingToken: string;
 }
 
@@ -71,6 +72,7 @@ export async function getRecentLedgers(cursor?: string, limit = 25): Promise<Led
       txFailed: l.failed_transaction_count ?? 0,
       opCount: l.operation_count,
       baseFeeStroops: l.base_fee_in_stroops,
+      protocol: l.protocol_version,
       pagingToken: l.paging_token,
     };
   });

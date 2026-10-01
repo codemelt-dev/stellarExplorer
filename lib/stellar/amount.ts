@@ -19,3 +19,15 @@ export function stroopsToLumens(stroops: bigint | string | number): string {
   const frac = (abs % STROOPS_PER_LUMEN).toString().padStart(7, "0").replace(/0+$/, "");
   return `${negative ? "-" : ""}${int}${frac ? `.${frac}` : ""}`;
 }
+
+// "37.3331825" -> "37.3332" at 4 decimals. Half-up on the digit string, bigint so no float drift
+export function roundAmount(amount: string, decimals: number): string {
+  const negative = amount.startsWith("-");
+  const [int = "0", frac = ""] = (negative ? amount.slice(1) : amount).split(".");
+  if (frac.length <= decimals) return amount;
+  const scaled = BigInt(int + frac.slice(0, decimals)) + (Number(frac[decimals]) >= 5 ? 1n : 0n);
+  if (scaled === 0n) return "0";
+  const digits = scaled.toString().padStart(decimals + 1, "0");
+  const out = decimals > 0 ? `${digits.slice(0, -decimals)}.${digits.slice(-decimals)}` : digits;
+  return (negative ? "-" : "") + out;
+}

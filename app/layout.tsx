@@ -1,4 +1,5 @@
 import { Header } from "@/components/layout/Header";
+import { TopBar } from "@/components/layout/TopBar";
 import { LegendFlyout } from "@/components/layout/LegendFlyout";
 import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
@@ -54,6 +55,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <Providers>
+          <TopBar />
           <Header />
           <main className="mx-auto w-full max-w-300 flex-1 px-4 py-6 sm:px-6">
             {children}

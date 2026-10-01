@@ -21,6 +21,7 @@
   --ok: #4ade80;
   --fail: #f87171;
   --contract: #a78bfa;
+  --table-head: #0e1012;
 
   /* shadcn semantic mapping */
   --background: var(--bg);
@@ -35,7 +36,8 @@
   --secondary-foreground: var(--text-hi);
   --muted: var(--surface-2);
   --muted-foreground: var(--text-dim);
-  --accent: var(--surface-2);
+  /* menu item highlight, one step lighter than the popover so hover reads */
+  --accent: color-mix(in srgb, var(--text-hi) 8%, var(--surface-2));
   --accent-foreground: var(--text-hi);
   --destructive: var(--fail);
   --border: var(--line);
@@ -66,10 +68,11 @@
   --line: #e1e4e8;
   --text-hi: #111418;
   --text-dim: #5d6470;
-  --gold: #a66a00;
+  --gold: #00a7b5;
   --ok: #15803d;
   --fail: #dc2626;
   --contract: #6d4fd0;
+  --table-head: #e6e9ee;
   --primary-foreground: #ffffff;
 }
 
@@ -81,6 +84,7 @@
   /* Project utilities: bg-surface, text-dim, text-gold, text-ok, text-fail, text-contract */
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-table-head: var(--table-head);
   --color-dim: var(--text-dim);
   --color-gold: var(--gold);
   --color-ok: var(--ok);
@@ -153,10 +157,10 @@
 
 /* semantic glows */
 .glow-gold {
-  box-shadow: 0 0 16px -2px rgba(255, 209, 102, 0.45);
+  box-shadow: 0 0 16px -2px color-mix(in srgb, var(--gold) 45%, transparent);
 }
 .glow-contract {
-  box-shadow: 0 0 10px -3px rgba(167, 139, 250, 0.35);
+  box-shadow: 0 0 10px -3px color-mix(in srgb, var(--contract) 35%, transparent);
 }
 
 /* interactive bento tiles: border warms and the tile lifts a hair */
@@ -185,10 +189,13 @@ pre {
   background: color-mix(in srgb, var(--gold) 30%, transparent);
 }
 
-/* Visible keyboard focus everywhere */
-:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
+/* Visible keyboard focus everywhere. In the base layer so components that draw
+   their own focus (menu item highlight) can opt out with outline-hidden */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
 }
 
 /* The full animation budget: ledger pulse, feed slide-ins, copy tick, raw

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SearchX, CheckCircle2, XCircle } from "lucide-react";
+import { SearchX, CheckCircle2, ChevronLeft, ChevronRight, XCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Address } from "@/components/stellar/Address";
 import { Time } from "@/components/stellar/Time";
@@ -73,23 +73,22 @@ export default async function LedgerPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">
-          Ledger <span className="font-mono">{ledger.sequence}</span>
-        </h1>
-        <nav className="flex gap-1 font-mono text-sm" aria-label="Adjacent ledgers">
-          <Link
-            href={`/ledger/${seq - 1}`}
-            className="rounded px-1.5 text-dim hover:text-foreground"
-          >
-            ← {seq - 1}
-          </Link>
-          <Link
-            href={`/ledger/${seq + 1}`}
-            className="rounded px-1.5 text-dim hover:text-foreground"
-          >
-            {seq + 1} →
-          </Link>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <nav aria-label="Breadcrumb" className="text-sm text-dim">
+            <Link href="/ledgers" className="rounded-sm hover:text-foreground">
+              Ledgers
+            </Link>
+            <span aria-hidden="true"> / </span>
+            <span className="text-foreground tabular-nums">{seq.toLocaleString("en-US")}</span>
+          </nav>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Ledger <span className="tabular-nums">{seq.toLocaleString("en-US")}</span>
+          </h1>
+        </div>
+        <nav className="flex w-full gap-2 sm:w-auto" aria-label="Adjacent ledgers">
+          <LedgerStep href={`/ledger/${seq - 1}`} direction="prev" sequence={seq - 1} />
+          <LedgerStep href={`/ledger/${seq + 1}`} direction="next" sequence={seq + 1} />
         </nav>
       </div>
 
@@ -179,5 +178,34 @@ function Meta({ label, children }: { label: string; children: React.ReactNode })
       <span className="text-xs uppercase tracking-wider text-dim">{label}</span>
       {children}
     </div>
+  );
+}
+
+// prev/next as real buttons: direction label on top, target sequence under it
+function LedgerStep({
+  href,
+  direction,
+  sequence,
+}: {
+  href: string;
+  direction: "prev" | "next";
+  sequence: number;
+}) {
+  const next = direction === "next";
+  const Icon = next ? ChevronRight : ChevronLeft;
+  return (
+    <Link
+      href={href}
+      aria-label={`${next ? "Next" : "Previous"} ledger, ${sequence}`}
+      className={`group flex flex-1 items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 transition-colors duration-150 hover:border-gold/40 hover:bg-surface-2 sm:flex-none ${next ? "flex-row-reverse text-right" : ""}`}
+    >
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-2 text-dim transition-colors duration-150 group-hover:bg-gold group-hover:text-primary-foreground">
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+      <span className="flex flex-col leading-tight">
+        <span className="text-xs text-dim">{next ? "Next ledger" : "Previous ledger"}</span>
+        <span className="text-sm font-medium tabular-nums">{sequence.toLocaleString("en-US")}</span>
+      </span>
+    </Link>
   );
 }

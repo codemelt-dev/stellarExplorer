@@ -2,25 +2,30 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { usePointerMenu } from "./usePointerMenu";
 import {
   getClientNetwork,
   setClientNetwork,
   type ClientNetworkId,
 } from "@/lib/stellar/clientConfig";
+import { StellarMark } from "@/components/stellar/StellarMark";
+import { iconButton } from "./iconButton";
+import { cn } from "@/lib/utils";
 
 const LABELS: Record<ClientNetworkId, string> = {
-  testnet: "Testnet",
-  mainnet: "Mainnet",
+  mainnet: "Stellar Mainnet",
+  testnet: "Stellar Testnet",
 };
 
 export function NetworkSwitcher() {
+  const menu = usePointerMenu();
   const router = useRouter();
   const [network, setNetwork] = useState<ClientNetworkId>("testnet");
 
@@ -42,25 +47,39 @@ export function NetworkSwitcher() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-dim transition-colors duration-150 hover:text-foreground"
-          aria-label="Switch network"
+          {...menu.trigger}
+          className={iconButton}
+          aria-label={`Network: ${LABELS[network]}. Switch network`}
+          title={LABELS[network]}
         >
-          {LABELS[network]}
-          <ChevronDown className="size-3" aria-hidden="true" />
+          <StellarMark className="size-3.5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {(Object.keys(LABELS) as ClientNetworkId[]).map((id) => (
-          <DropdownMenuItem
-            key={id}
-            onClick={() => change(id)}
-            className="text-sm"
-          >
-            <span className="flex-1">{LABELS[id]}</span>
-            {id === network && <Check className="size-3.5" aria-hidden="true" />}
-          </DropdownMenuItem>
-        ))}
+      <DropdownMenuContent {...menu.content} align="end" sideOffset={8} className="w-48 p-1.5">
+        <NetworkItem id="mainnet" active={network} onPick={change} />
+        <DropdownMenuSeparator className="my-1.5" />
+        <NetworkItem id="testnet" active={network} onPick={change} />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function NetworkItem({
+  id,
+  active,
+  onPick,
+}: {
+  id: ClientNetworkId;
+  active: ClientNetworkId;
+  onPick: (id: ClientNetworkId) => void;
+}) {
+  return (
+    <DropdownMenuItem
+      onClick={() => onPick(id)}
+      aria-current={id === active ? "true" : undefined}
+      className={cn("px-2.5 py-2 text-sm", id === active && "font-medium text-gold focus:text-gold")}
+    >
+      {LABELS[id]}
+    </DropdownMenuItem>
   );
 }
