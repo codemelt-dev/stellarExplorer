@@ -16,6 +16,7 @@ import { ClickableRow } from "@/components/stellar/ClickableRow";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
 import { Pager } from "@/components/layout/Pager";
+import { listHeadClass } from "@/components/layout/listTable";
 import { AutoRefresh } from "@/components/live/AutoRefresh";
 import { getRecentLedgers, type LedgerRow } from "@/lib/stellar/ledgers";
 import { stroopsToLumens } from "@/lib/stellar/amount";
@@ -61,16 +62,17 @@ export default async function LedgersPage({
           <EmptyState message="No ledgers on this page. Go back to the latest ones." />
         ) : (
           <Table>
-            <TableHeader>
+            <TableHeader className={listHeadClass}>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-4">Ledger</TableHead>
-                <TableHead>Hash</TableHead>
+                <TableHead>Ledger hash</TableHead>
                 <TableHead>Closed</TableHead>
-                <TableHead className="text-right">Txs</TableHead>
+                <TableHead className="text-right">Transactions</TableHead>
                 <TableHead className="text-right">Failed</TableHead>
-                <TableHead className="text-right">Ops</TableHead>
+                <TableHead className="text-right">Operations</TableHead>
                 <TableHead className="text-right">Success rate</TableHead>
-                <TableHead className="pr-4 text-right">Base fee</TableHead>
+                <TableHead className="text-right">Base fee</TableHead>
+                <TableHead className="pr-4 text-right">Protocol</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -117,8 +119,13 @@ export default async function LedgersPage({
                     <TableCell className="text-right tabular-nums">
                       {rate === null ? <span className="text-dim">–</span> : `${rate.toFixed(1)}%`}
                     </TableCell>
-                    <TableCell className="pr-4 text-right">
+                    <TableCell className="text-right">
                       <Amount amount={stroopsToLumens(l.baseFeeStroops)} className="text-dim" />
+                    </TableCell>
+                    <TableCell className="pr-4 text-right">
+                      <span className="inline-flex rounded-md border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-xs tabular-nums text-dim">
+                        v{l.protocol}
+                      </span>
                     </TableCell>
                   </ClickableRow>
                 );

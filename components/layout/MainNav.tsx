@@ -17,9 +17,6 @@ export function MainNav({ className }: { className?: string }) {
       <Link href="/analytics" className={item}>
         Analytics
       </Link>
-      <Link href="/#network" className={item}>
-        Network
-      </Link>
     </nav>
   );
 }

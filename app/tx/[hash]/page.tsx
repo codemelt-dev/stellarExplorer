@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
-import { SearchX } from "lucide-react";
+import { Clock, SearchX, ShieldCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { VerdictBanner } from "@/components/tx/VerdictBanner";
+import { TxAction } from "@/components/tx/TxAction";
+import { StatusPill } from "@/components/tx/StatusPill";
+import { DetailGroup, DetailList, DetailRow } from "@/components/tx/DetailList";
+import { FlowTarget } from "@/components/tx/FlowTarget";
+import { OpSentence } from "@/components/stellar/OpSentence";
 import { OpCard } from "@/components/tx/OpCard";
 import { Address } from "@/components/stellar/Address";
 import { Time } from "@/components/stellar/Time";
@@ -15,6 +19,7 @@ import { truncateKey } from "@/lib/stellar/strkey";
 import { stroopsToLumens } from "@/lib/stellar/amount";
 import { activeNetwork } from "@/lib/stellar/network";
 import {
+  envelopeFlow,
   getTransaction,
   getTransactionEffects,
   getTransactionOperations,
@@ -34,7 +39,7 @@ import { BalanceChanges } from "@/components/tx/BalanceChanges";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getTransactionMetaXdr } from "@/lib/stellar/rpc";
 import { getContractInterface } from "@/lib/stellar/contracts";
-import { txTypeLabel } from "@/lib/stellar/humanize";
+import { humanizeOperation, txTypeLabel } from "@/lib/stellar/humanize";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -114,17 +119,33 @@ export default async function TransactionPage({
     )
     .filter(Boolean);
   const firstInvocation = invocations[0];
-  const summary =
-    firstInvocation?.kind === "invokeContract" && firstInvocation.contractId ? (
-      <>
-        Invoked{" "}
-        <span className="font-mono text-contract">
-          {firstInvocation.functionName}
-        </span>{" "}
-        on <Address address={firstInvocation.contractId} />
-        {invocations.length > 1 && ` +${invocations.length - 1} more`}
-      </>
-    ) : undefined;
+  const firstOp = ops[0];
+  const moreOps = ops.length - 1;
+  // same sentence as the first op card, so the top line and the list agree
+  const action = firstOp ? (
+    <span className="leading-7">
+      {firstInvocation?.kind === "invokeContract" && firstInvocation.contractId ? (
+        <>
+          <OpSentence segments={humanizeOperation(firstOp).slice(0, 1)} /> called{" "}
+          <span className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-sm text-contract">
+            {firstInvocation.functionName}
+          </span>{" "}
+          on <Address address={firstInvocation.contractId} />
+        </>
+      ) : (
+        <OpSentence segments={humanizeOperation(firstOp)} />
+      )}
+      {moreOps > 0 && (
+        <a href="#operations" className="ml-2 rounded-sm text-sm text-dim underline-offset-4 hover:text-foreground hover:underline">
+          +{moreOps} more operation{moreOps === 1 ? "" : "s"}
+        </a>
+      )}
+    </span>
+  ) : (
+    <span className="text-dim">No operations</span>
+  );
+  const flow = envelopeFlow(tx.envelope_xdr, tx.source_account);
+  const utc = (iso: string) => iso.replace("T", " ").replace(/(\.\d+)?Z$/, " UTC");
 
   const typeChip = txTypeLabel(ops.map((op) => op.type as string));
   const resources = hasSorobanOp ? parseSorobanResources(tx.envelope_xdr) : null;
@@ -151,141 +172,166 @@ export default async function TransactionPage({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Identity row */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 className="text-xl font-semibold tracking-tight">Transaction</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 pb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-xl font-semibold tracking-tight">Transaction details</h1>
+          <StatusPill successful={tx.successful} />
+        </div>
         {typeChip && (
           <Badge
             variant="outline"
             className={cn(
               "font-mono text-[11px]",
-              typeChip.tone === "contract"
-                ? "border-contract/40 text-contract"
-                : "text-dim",
+              typeChip.tone === "contract" ? "border-contract/40 text-contract" : "text-dim",
             )}
           >
             {typeChip.label}
           </Badge>
         )}
-        <span className="inline-flex items-center gap-1.5">
-          <span className="font-mono text-sm text-dim" title={tx.hash}>
-            {truncateKey(tx.hash, 8)}
-          </span>
-          <CopyButton value={tx.hash} label="Copy transaction hash" />
-        </span>
       </div>
 
-      <VerdictBanner successful={tx.successful} error={error} summary={summary} />
-
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue="overview" className="gap-4">
         <TabsList>
-          <TabsTrigger value="overview">Summary</TabsTrigger>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="balances">Effects</TabsTrigger>
           <TabsTrigger value="raw">XDR</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="mt-4 flex flex-col gap-6">
-      {/* label/value rows: scannable facts */}
-      <Card className="gap-0 p-5 py-2">
-        <KVRow label="Hash">
-          <span className="inline-flex min-w-0 items-center gap-1.5">
-            <span className="truncate font-mono text-sm" title={tx.hash}>
-              {tx.hash}
-            </span>
-            <CopyButton value={tx.hash} label="Copy transaction hash" />
-          </span>
-        </KVRow>
-        <KVRow label="Ledger">
-          <Link
-            href={`/ledger/${tx.ledger_attr}`}
-            className="font-mono text-sm text-gold hover:underline underline-offset-4"
-          >
-            {tx.ledger_attr}
-          </Link>
-        </KVRow>
-        <KVRow label="Time">
-          <span className="inline-flex flex-wrap items-baseline gap-x-3">
-            <Time iso={tx.created_at} className="text-foreground" />
-            <span className="font-mono text-xs text-dim">
-              {new Date(tx.created_at)
-                .toISOString()
-                .replace("T", " ")
-                .replace(/\.\d+Z$/, " UTC")}
-            </span>
-          </span>
-        </KVRow>
-        <KVRow label="Source">
-          <Address address={tx.source_account} chars={8} />
-        </KVRow>
-        <KVRow label="Fee">
-          <span className="inline-flex flex-wrap items-baseline gap-x-3">
-            <Amount amount={stroopsToLumens(tx.fee_charged)} />
-            <span className="font-mono text-xs text-dim">
-              max {stroopsToLumens(tx.max_fee)} proposed
-            </span>
-          </span>
-        </KVRow>
-        {memo && (
-          <KVRow label={memo.label}>
-            <span className="font-mono text-sm break-all">{memo.text}</span>
-          </KVRow>
-        )}
-        <KVRow label="Sequence">
-          <span className="font-mono text-sm">{tx.source_account_sequence}</span>
-        </KVRow>
-        {resources && (
-          <KVRow label="Resources">
-            <span className="inline-flex flex-wrap gap-x-4 font-mono text-sm">
-              <span>
-                {resources.instructions.toLocaleString("en-US")}
-                <span className="text-dim"> instr</span>
-              </span>
-              <span>
-                {resources.readBytes.toLocaleString("en-US")}
-                <span className="text-dim"> B read</span>
-              </span>
-              <span>
-                {resources.writeBytes.toLocaleString("en-US")}
-                <span className="text-dim"> B written</span>
-              </span>
-              <span className="text-dim">
-                resource fee {stroopsToLumens(resources.resourceFeeStroops)} XLM
-              </span>
-            </span>
-          </KVRow>
-        )}
-        {preconditions && (
-          <KVRow label="Valid">
-            <span className="font-mono text-xs text-dim">
-              {preconditions.minTime
-                ? `from ${new Date(Number(preconditions.minTime) * 1000).toISOString().replace("T", " ").slice(0, 19)} UTC `
-                : ""}
-              {preconditions.maxTime
-                ? `until ${new Date(Number(preconditions.maxTime) * 1000).toISOString().replace("T", " ").slice(0, 19)} UTC`
-                : ""}
-            </span>
-          </KVRow>
-        )}
-      </Card>
+        <TabsContent value="overview" className="flex flex-col gap-4">
+      <TxAction successful={tx.successful} error={error}>
+        {action}
+      </TxAction>
 
-      {feeBump && innerTx && (
-        <Card className="gap-2 border-l-2 border-l-gold p-5">
-          <span className="text-xs uppercase tracking-wider text-dim">
-            Fee-bump transaction
-          </span>
-          <p className="text-sm">
-            Fees paid by <Address address={feeAccount} /> on behalf of inner
-            transaction{" "}
-            <span className="font-mono text-sm" title={innerTx.hash}>
-              {truncateKey(innerTx.hash, 6)}
+      <DetailList>
+        <DetailGroup>
+          <DetailRow label="Transaction hash" help="Unique ID of this transaction. Share it to point anyone at exactly this transaction.">
+            <span className="inline-flex max-w-full items-center gap-1.5">
+              <span className="font-mono break-all">{tx.hash}</span>
+              <CopyButton value={tx.hash} label="Copy transaction hash" />
             </span>
-            <CopyButton value={innerTx.hash} label="Copy inner hash" className="ml-1" />
-          </p>
-        </Card>
-      )}
+          </DetailRow>
+          <DetailRow label="Status" help="Whether the network applied this transaction. Failed transactions change nothing but still pay the fee.">
+            <StatusPill successful={tx.successful} />
+          </DetailRow>
+          <DetailRow label="Ledger" help="The ledger (Stellar's block) that included this transaction. Ledgers are final the moment they close, there are no confirmations to wait for.">
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <Link
+                href={`/ledger/${tx.ledger_attr}`}
+                className="rounded-sm font-mono text-gold underline-offset-4 hover:underline"
+              >
+                {tx.ledger_attr.toLocaleString("en-US")}
+              </Link>
+              <span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-xs text-dim">
+                <ShieldCheck className="size-3.5 text-ok" aria-hidden="true" />
+                Final
+              </span>
+            </span>
+          </DetailRow>
+          <DetailRow label="Timestamp" help="When the ledger closed. Relative time first, exact UTC time next to it.">
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <Clock className="size-3.5 text-dim" aria-hidden="true" />
+              <Time iso={tx.created_at} className="text-foreground" />
+              <span className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-dim">
+                {utc(new Date(tx.created_at).toISOString())}
+              </span>
+            </span>
+          </DetailRow>
+        </DetailGroup>
+
+        <DetailGroup>
+          <DetailRow label="From" help="The account that signed and submitted this transaction. Its sequence number was used.">
+            <Address address={tx.source_account} chars={40} />
+          </DetailRow>
+          <DetailRow label="To / interacted with" help="Who or what the main operation targets: the recipient, the contract called, the asset pair traded or the asset trusted.">
+            <FlowTarget target={flow.to} moreOps={0} full />
+          </DetailRow>
+          {feeBump && innerTx && (
+            <>
+              <DetailRow label="Fee paid by" help="Someone else paid the fee for this transaction (a fee bump). Wallets use this to cover their users' fees.">
+                <Address address={feeAccount} chars={40} />
+              </DetailRow>
+              <DetailRow label="Inner transaction" help="The original transaction wrapped by the fee bump.">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="font-mono" title={innerTx.hash}>
+                    {truncateKey(innerTx.hash, 10)}
+                  </span>
+                  <CopyButton value={innerTx.hash} label="Copy inner transaction hash" />
+                </span>
+              </DetailRow>
+            </>
+          )}
+        </DetailGroup>
+
+        <DetailGroup>
+          {flow.amount && (
+            <DetailRow label="Value" help="Amount moved by the main operation, at full precision.">
+              <Amount
+                amount={flow.amount.value}
+                assetCode={flow.amount.asset.code}
+                assetIssuer={flow.amount.asset.issuer}
+              />
+            </DetailRow>
+          )}
+          <DetailRow label="Transaction fee" help="What was actually charged. Senders set a maximum; Stellar only charges what the ledger needed.">
+            <span className="inline-flex flex-wrap items-baseline gap-x-3">
+              <Amount amount={stroopsToLumens(tx.fee_charged)} />
+              <span className="text-xs text-dim">
+                max {stroopsToLumens(tx.max_fee)} XLM offered
+              </span>
+            </span>
+          </DetailRow>
+          {resources && (
+            <DetailRow label="Contract resources" help="Compute and storage the contract call used. The resource fee is part of the transaction fee.">
+              <span className="inline-flex flex-wrap gap-2 font-mono text-xs">
+                {[
+                  [resources.instructions.toLocaleString("en-US"), "instructions"],
+                  [resources.readBytes.toLocaleString("en-US"), "bytes read"],
+                  [resources.writeBytes.toLocaleString("en-US"), "bytes written"],
+                  [`${stroopsToLumens(resources.resourceFeeStroops)} XLM`, "resource fee"],
+                ].map(([value, label]) => (
+                  <span key={label} className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5">
+                    {value} <span className="text-dim">{label}</span>
+                  </span>
+                ))}
+              </span>
+            </DetailRow>
+          )}
+        </DetailGroup>
+
+        <DetailGroup>
+          {memo && (
+            <DetailRow label={memo.label} help="Free-form note attached by the sender. Exchanges often use it to route deposits.">
+              <span className="font-mono break-all">{memo.text}</span>
+            </DetailRow>
+          )}
+          <DetailRow label="Operations" help="Steps inside this transaction. They all succeed together or none of them apply.">
+            <a href="#operations" className="rounded-sm underline-offset-4 hover:underline">
+              {ops.length}
+            </a>
+          </DetailRow>
+          <DetailRow label="Sequence number" help="Per-account counter that orders transactions and stops replays.">
+            <span className="font-mono">{tx.source_account_sequence}</span>
+          </DetailRow>
+          {preconditions && (preconditions.minTime || preconditions.maxTime) && (
+            <DetailRow label="Valid" help="Time window the sender allowed this transaction to be included in.">
+              <span className="font-mono text-xs text-dim">
+                {preconditions.minTime
+                  ? `from ${utc(new Date(Number(preconditions.minTime) * 1000).toISOString())} `
+                  : ""}
+                {preconditions.maxTime
+                  ? `until ${utc(new Date(Number(preconditions.maxTime) * 1000).toISOString())}`
+                  : ""}
+              </span>
+            </DetailRow>
+          )}
+          <DetailRow label="Signatures" help="How many keys signed. The raw signatures are on the XDR tab.">
+            {tx.signatures.length}
+          </DetailRow>
+        </DetailGroup>
+      </DetailList>
 
       {/* Operations - the reading layer */}
-      <section className="flex flex-col gap-3">
+      <section id="operations" className="flex scroll-mt-24 flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-lg font-semibold">
             {ops.length} operation{ops.length === 1 ? "" : "s"}
@@ -336,7 +382,7 @@ export default async function TransactionPage({
       {events.length > 0 && <ContractEvents events={events} />}
         </TabsContent>
 
-        <TabsContent value="balances" className="mt-4">
+        <TabsContent value="balances">
           <BalanceChanges
             effects={effects}
             sorobanMovements={tokenMovements}
@@ -346,7 +392,7 @@ export default async function TransactionPage({
           />
         </TabsContent>
 
-        <TabsContent value="raw" className="mt-4">
+        <TabsContent value="raw">
           <Card className="gap-4 p-5">
             <h2 className="text-base font-semibold">
               Signatures ({tx.signatures.length})
@@ -373,24 +419,6 @@ export default async function TransactionPage({
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
-  );
-}
-
-/** Label column left (fixed, dim), value right - the readable KV grammar. */
-function KVRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1 border-b border-border py-2.5 last:border-b-0 sm:flex-row sm:items-baseline sm:gap-4">
-      <span className="w-36 shrink-0 text-xs uppercase tracking-wider text-dim">
-        {label}
-      </span>
-      <span className="min-w-0 flex-1">{children}</span>
     </div>
   );
 }

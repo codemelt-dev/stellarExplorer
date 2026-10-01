@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, CheckCircle2, FileCode2, Layers, Send, XCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,8 +19,12 @@ import { ClickableRow } from "@/components/stellar/ClickableRow";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
 import { Pager } from "@/components/layout/Pager";
+import { listHeadClass } from "@/components/layout/listTable";
+import { TypeTabs, type TypeTab } from "@/components/layout/TypeTabs";
+import { FlowTarget } from "@/components/tx/FlowTarget";
 import { AutoRefresh } from "@/components/live/AutoRefresh";
-import { getRecentTransactions, type TxRow } from "@/lib/stellar/transactions";
+import { getRecentTransactions, type TxPage } from "@/lib/stellar/transactions";
+import type { HistoryFilter } from "@/lib/stellar/opFilters";
 import { txTypeLabel } from "@/lib/stellar/humanize";
 import { stroopsToLumens } from "@/lib/stellar/amount";
 import { truncateKey } from "@/lib/stellar/strkey";
@@ -29,17 +33,37 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Transactions · Stellar Explorer" };
 
+const TABS: TypeTab<HistoryFilter>[] = [
+  { id: "all", label: "All", icon: Layers },
+  { id: "payments", label: "Payments", icon: Send },
+  { id: "trades", label: "Trades", icon: ArrowLeftRight },
+  { id: "contracts", label: "Contracts", icon: FileCode2 },
+];
+
+const EMPTY_NOUN: Record<HistoryFilter, string> = {
+  all: "transactions",
+  payments: "payments",
+  trades: "trades",
+  contracts: "contract calls",
+};
+
+function parseType(value?: string): HistoryFilter {
+  return TABS.some((t) => t.id === value) ? (value as HistoryFilter) : "all";
+}
+
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cursor?: string }>;
+  searchParams: Promise<{ cursor?: string; type?: string }>;
 }) {
-  const { cursor } = await searchParams;
+  const params = await searchParams;
+  const cursor = params.cursor;
+  const type = parseType(params.type);
   const network = await activeNetwork();
 
-  let rows: TxRow[];
+  let page: TxPage;
   try {
-    rows = await getRecentTransactions(cursor);
+    page = await getRecentTransactions(cursor, type);
   } catch {
     return (
       <ErrorState
@@ -48,6 +72,8 @@ export default async function TransactionsPage({
       />
     );
   }
+
+  const { rows } = page;
 
   return (
     <div className="flex flex-col gap-4">
@@ -64,21 +90,30 @@ export default async function TransactionsPage({
         <StatusLegend />
       </div>
 
+      <TypeTabs tabs={TABS} active={type} basePath="/transactions" label="Transaction types" />
+
       <Card className="gap-0 p-0">
         {rows.length === 0 ? (
-          <EmptyState message="No transactions on this page. Go back to the latest ones." />
+          <EmptyState
+            message={
+              type === "all"
+                ? "No transactions on this page. Go back to the latest ones."
+                : `No ${EMPTY_NOUN[type]} in the last ${page.scanned.toLocaleString("en-US")} transactions.${page.nextCursor ? " Older ones may have some." : ""}`
+            }
+          />
         ) : (
           <Table>
-            <TableHeader>
+            <TableHeader className={listHeadClass}>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-8 pl-4" aria-label="Status" />
-                <TableHead>Hash</TableHead>
-                <TableHead>Ledger</TableHead>
+                <TableHead>Tx Hash</TableHead>
                 <TableHead>Age</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead className="text-right">Ops</TableHead>
-                <TableHead className="pr-4 text-right">Fee</TableHead>
+                <TableHead>From</TableHead>
+                <TableHead className="w-8 px-0" aria-label="Direction" />
+                <TableHead>To / interacted with</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="hidden pr-4 text-right xl:table-cell">Fee</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -109,16 +144,17 @@ export default async function TransactionsPage({
                         <CopyButton value={tx.hash} label="Copy transaction hash" />
                       </span>
                     </TableCell>
-                    <TableCell>
-                      <Link
-                        href={`/ledger/${tx.ledger}`}
-                        className="rounded-sm tabular-nums hover:text-gold"
-                      >
-                        {tx.ledger.toLocaleString("en-US")}
-                      </Link>
-                    </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <Time iso={tx.createdAt} />
+                      <span className="flex flex-col leading-tight">
+                        <Time iso={tx.createdAt} />
+                        <Link
+                          href={`/ledger/${tx.ledger}`}
+                          className="w-fit rounded-sm text-xs tabular-nums text-dim hover:text-gold"
+                          title="Ledger"
+                        >
+                          #{tx.ledger.toLocaleString("en-US")}
+                        </Link>
+                      </span>
                     </TableCell>
                     <TableCell>
                       {type ? (
@@ -136,10 +172,29 @@ export default async function TransactionsPage({
                       )}
                     </TableCell>
                     <TableCell>
-                      <Address address={tx.source} />
+                      <Address address={tx.flow.from} copy={false} />
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{tx.opCount}</TableCell>
-                    <TableCell className="pr-4 text-right">
+                    <TableCell className="px-0">
+                      <span className="flex size-6 items-center justify-center rounded-full bg-surface-2">
+                        <ArrowRight className="size-3.5 text-dim" aria-hidden="true" />
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <FlowTarget target={tx.flow.to} moreOps={tx.flow.moreOps} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {tx.flow.amount ? (
+                        <Amount
+                          amount={tx.flow.amount.value}
+                          assetCode={tx.flow.amount.asset.code}
+                          assetIssuer={tx.flow.amount.asset.issuer}
+                          maxDecimals={4}
+                        />
+                      ) : (
+                        <span className="text-dim">–</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="hidden pr-4 text-right xl:table-cell">
                       <Amount amount={stroopsToLumens(tx.feeStroops)} className="text-dim" />
                     </TableCell>
                   </ClickableRow>
@@ -152,8 +207,9 @@ export default async function TransactionsPage({
 
       <Pager
         basePath="/transactions"
-        olderCursor={rows.length === 25 ? rows[rows.length - 1].pagingToken : null}
+        olderCursor={page.nextCursor}
         isFirstPage={!cursor}
+        query={type === "all" ? {} : { type }}
       />
     </div>
   );

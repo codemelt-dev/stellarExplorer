@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { usePointerMenu } from "./usePointerMenu";
 import { ProtocolIcon } from "@/components/defi/ProtocolIcon";
 import { PROTOCOLS, protocolLogo } from "@/lib/stellar/protocols";
 
@@ -22,15 +23,16 @@ export function DefiMenu({
   label?: React.ReactNode;
   align?: "start" | "end";
 }) {
+  const menu = usePointerMenu();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className={`${triggerClassName} inline-flex items-center gap-1 data-[state=open]:bg-surface-2 data-[state=open]:text-foreground`}>
+        <button type="button" {...menu.trigger} className={`${triggerClassName} inline-flex items-center gap-1 data-[state=open]:bg-surface-2 data-[state=open]:text-foreground`}>
           {label}
           <ChevronDown className="size-3.5" aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={align} sideOffset={8} className="w-[min(26rem,calc(100vw-2rem))] p-2">
+      <DropdownMenuContent {...menu.content} align={align} sideOffset={8} className="w-[min(26rem,calc(100vw-2rem))] p-2">
         <div className="grid grid-cols-2 gap-1">
           {PROTOCOLS.map((p) => (
             <DropdownMenuItem key={p.slug} asChild className="gap-2.5 px-2.5 py-2">

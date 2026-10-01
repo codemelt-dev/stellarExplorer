@@ -32,7 +32,7 @@ export function ComingSoon({
       </div>
 
       <Card className="gap-3 p-5">
-        <h2 className="text-xs font-medium uppercase tracking-wider text-dim">What's planned</h2>
+        <h2 className="text-xs font-medium uppercase tracking-wider text-dim">What&apos;s planned</h2>
         <ul className="flex flex-col gap-2">
           {planned.map((p) => (
             <li key={p} className="flex items-start gap-2.5 text-sm">

@@ -16,7 +16,7 @@ export interface MarketStats {
   accounts: AccountTotals | null;
 }
 
-async function getXlmMarket(): Promise<XlmMarket | null> {
+export async function getXlmMarket(): Promise<XlmMarket | null> {
   try {
     const res = await fetch(
       "https://api.coingecko.com/api/v3/simple/price?ids=stellar&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true",
