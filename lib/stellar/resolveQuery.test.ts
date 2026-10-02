@@ -83,6 +83,13 @@ describe("resolveQuery", () => {
 });
 
 describe("routeFor", () => {
+  it("keeps asset queries on the implemented search page", () => {
+    expect(routeFor({ type: "asset", code: "USDC" })).toBe("/search?q=USDC");
+    expect(routeFor({ type: "asset", code: "USDC", issuer: ACCOUNT })).toBe(
+      `/search?q=USDC-${ACCOUNT}`,
+    );
+  });
+
   it("routes each type", () => {
     expect(routeFor({ type: "account", id: ACCOUNT })).toBe(
       `/account/${ACCOUNT}`,

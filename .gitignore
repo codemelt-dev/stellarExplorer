@@ -12,6 +12,10 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/.next-e2e/
+/.e2e-cache/
 
 # next.js
 /.next/
