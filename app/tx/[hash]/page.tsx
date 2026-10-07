@@ -7,6 +7,7 @@ import { DetailGroup, DetailList, DetailRow } from "@/components/tx/DetailList";
 import { FlowTarget } from "@/components/tx/FlowTarget";
 import { OpSentence } from "@/components/stellar/OpSentence";
 import { OpCard } from "@/components/tx/OpCard";
+import { OpJump } from "@/components/tx/OpJump";
 import { Address } from "@/components/stellar/Address";
 import { Time } from "@/components/stellar/Time";
 import { Amount } from "@/components/stellar/Amount";
@@ -332,26 +333,11 @@ export default async function TransactionPage({
 
       {/* Operations - the reading layer */}
       <section id="operations" className="flex scroll-mt-24 flex-col gap-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">
             {ops.length} operation{ops.length === 1 ? "" : "s"}
           </h2>
-          {ops.length > 3 && (
-            <nav
-              className="flex max-w-full flex-wrap gap-1"
-              aria-label="Jump to operation"
-            >
-              {ops.map((_, i) => (
-                <a
-                  key={i}
-                  href={`#op-${i + 1}`}
-                  className="rounded-md border border-border px-2 py-0.5 font-mono text-xs text-dim transition-colors duration-150 hover:text-foreground"
-                >
-                  {i + 1}
-                </a>
-              ))}
-            </nav>
-          )}
+          {ops.length > 3 && <OpJump count={ops.length} />}
         </div>
         {ops.length === 0 ? (
           <Card className="p-0">
