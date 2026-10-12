@@ -34,10 +34,15 @@ export function OpJump({ count }: { count: number }) {
     if (Number.isNaN(n)) return;
     const target = Math.min(Math.max(n, 1), count);
     setValue(String(target));
-    // a real fragment navigation, so the card gets :target and the URL is shareable
-    window.location.replace(`#op-${target}`);
-    // the hash doesn't change when jumping to the same op twice, scroll anyway
-    document.getElementById(`op-${target}`)?.scrollIntoView();
+    const hash = `#op-${target}`;
+    if (window.location.hash === hash) {
+      // same op again: no navigation happens, so tell the list to go there itself
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    } else {
+      // a real fragment navigation, so the card gets :target and the URL is shareable.
+      // The paged list opens the right page and scrolls
+      window.location.replace(hash);
+    }
   }
 
   return (

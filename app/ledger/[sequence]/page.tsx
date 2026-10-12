@@ -8,6 +8,7 @@ import { Amount } from "@/components/stellar/Amount";
 import { CopyButton } from "@/components/stellar/CopyButton";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
+import { PagedList } from "@/components/layout/PagedList";
 import { getLedger, getLedgerTransactions } from "@/lib/stellar/ledgers";
 import { NotFoundError } from "@/lib/stellar/transactions";
 import { stroopsToLumens } from "@/lib/stellar/amount";
@@ -119,7 +120,7 @@ export default async function LedgerPage({
         </Meta>
       </Card>
 
-      <section className="flex flex-col gap-3">
+      <section id="transactions" className="flex scroll-mt-24 flex-col gap-3">
         <h2 className="text-lg font-semibold">
           {txs.length} transaction{txs.length === 1 ? "" : "s"}
         </h2>
@@ -128,38 +129,40 @@ export default async function LedgerPage({
             <EmptyState message="No transactions in this ledger. It closed empty." />
           </Card>
         ) : (
-          <Card className="gap-0 p-5 py-2">
-            {txs.map((tx) => (
-              <div
-                key={tx.hash}
-                className="flex items-center justify-between gap-4 border-b border-border py-2.5 last:border-b-0"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  {tx.successful ? (
-                    <CheckCircle2 className="size-4 shrink-0 text-ok/60" aria-label="Success" />
-                  ) : (
-                    <XCircle className="size-4 shrink-0 text-fail" aria-label="Failed" />
-                  )}
-                  <Link
-                    href={`/tx/${tx.hash}`}
-                    className="rounded-sm font-mono text-sm text-gold hover:underline underline-offset-4"
-                    title={tx.hash}
-                  >
-                    {truncateKey(tx.hash, 6)}
-                  </Link>
-                  <span className="hidden text-sm text-dim sm:inline">
-                    {tx.opCount} op{tx.opCount === 1 ? "" : "s"}
-                  </span>
-                  <span className="hidden md:inline">
-                    <Address address={tx.source} />
-                  </span>
+          <Card className="gap-3 p-5 py-4">
+            <PagedList topId="transactions" className="flex flex-col">
+              {txs.map((tx) => (
+                <div
+                  key={tx.hash}
+                  className="flex items-center justify-between gap-4 border-b border-border py-2.5 last:border-b-0"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    {tx.successful ? (
+                      <CheckCircle2 className="size-4 shrink-0 text-ok/60" aria-label="Success" />
+                    ) : (
+                      <XCircle className="size-4 shrink-0 text-fail" aria-label="Failed" />
+                    )}
+                    <Link
+                      href={`/tx/${tx.hash}`}
+                      className="rounded-sm font-mono text-sm text-gold hover:underline underline-offset-4"
+                      title={tx.hash}
+                    >
+                      {truncateKey(tx.hash, 6)}
+                    </Link>
+                    <span className="hidden text-sm text-dim sm:inline">
+                      {tx.opCount} op{tx.opCount === 1 ? "" : "s"}
+                    </span>
+                    <span className="hidden md:inline">
+                      <Address address={tx.source} />
+                    </span>
+                  </div>
+                  <Amount
+                    amount={stroopsToLumens(tx.feeStroops)}
+                    className="text-dim"
+                  />
                 </div>
-                <Amount
-                  amount={stroopsToLumens(tx.feeStroops)}
-                  className="text-dim"
-                />
-              </div>
-            ))}
+              ))}
+            </PagedList>
           </Card>
         )}
       </section>

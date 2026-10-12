@@ -8,6 +8,7 @@ import { FlowTarget } from "@/components/tx/FlowTarget";
 import { OpSentence } from "@/components/stellar/OpSentence";
 import { OpCard } from "@/components/tx/OpCard";
 import { OpJump } from "@/components/tx/OpJump";
+import { PagedList } from "@/components/layout/PagedList";
 import { Address } from "@/components/stellar/Address";
 import { Time } from "@/components/stellar/Time";
 import { Amount } from "@/components/stellar/Amount";
@@ -362,23 +363,25 @@ export default async function TransactionPage({
             <EmptyState message="Horizon returned no operations for this transaction." />
           </Card>
         ) : (
-          ops.map((op, i) => {
-            const invocation = parseSorobanInvocation(tx.envelope_xdr, i);
-            return (
-              <OpCard
-                key={op.id}
-                index={i}
-                record={op}
-                invocation={invocation}
-                argNames={argNamesFor(invocation)}
-                returnValue={
-                  (op.type as string) === "invoke_host_function"
-                    ? returnValue
-                    : null
-                }
-              />
-            );
-          })
+          <PagedList anchorPrefix="op-" topId="operations" className="flex flex-col gap-3">
+            {ops.map((op, i) => {
+              const invocation = parseSorobanInvocation(tx.envelope_xdr, i);
+              return (
+                <OpCard
+                  key={op.id}
+                  index={i}
+                  record={op}
+                  invocation={invocation}
+                  argNames={argNamesFor(invocation)}
+                  returnValue={
+                    (op.type as string) === "invoke_host_function"
+                      ? returnValue
+                      : null
+                  }
+                />
+              );
+            })}
+          </PagedList>
         )}
       </section>
 
