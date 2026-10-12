@@ -35,42 +35,78 @@ function parseDetails(details: unknown): unknown {
   }
 }
 
+const TX_COLUMNS =
+  "ledger_sequence, tx_index, lower(hex(hash)) AS tx_hash, " +
+  "toUnixTimestamp(closed_at) AS closed_ts, successful, source_account, fee_charged, op_count";
+
+// (ledger, tx) pairs as a SQL tuple list. Built only from integers the indexer
+// returned, checked here, so nothing from the request reaches the query text
+function tupleList(txs: ChTx[]): string {
+  return txs
+    .map((t) => {
+      const ledger = Number(t.ledger_sequence);
+      const tx = Number(t.tx_index);
+      if (!Number.isInteger(ledger) || !Number.isInteger(tx)) throw new Error("bad tx key");
+      return `(${ledger},${tx})`;
+    })
+    .join(",");
+}
+
 /**
  * Newest transactions first, failed included. `cursor` is the paging token of
- * the last row seen. Null when the indexer has nothing there (before go-live).
+ * the last row seen. With `types`, only transactions holding an operation of
+ * one of those types. Null when the indexer has nothing there (before go-live).
  */
 export async function indexedRecentTransactions(
   cursor: string | undefined,
   limit: number,
+  types?: ReadonlySet<string>,
 ): Promise<TxPage | null> {
   const before = cursor ? parseCursor(cursor) : null;
   if (cursor && !before) return null;
+  const at = { ledger: before?.ledger ?? MAX_UINT32, tx: before?.txIndex ?? MAX_UINT32, limit };
 
-  const txs = await chQuery<ChTx>(
-    `SELECT ledger_sequence, tx_index, lower(hex(hash)) AS tx_hash,
-            toUnixTimestamp(closed_at) AS closed_ts, successful, source_account, fee_charged, op_count
-     FROM transactions
-     WHERE (ledger_sequence, tx_index) < ({ledger:UInt32}, {tx:UInt32})
-     ORDER BY ledger_sequence DESC, tx_index DESC LIMIT {limit:UInt32}`,
-    { ledger: before?.ledger ?? MAX_UINT32, tx: before?.txIndex ?? MAX_UINT32, limit },
-  );
+  const txs = types
+    ? await chQuery<ChTx>(
+        `SELECT ${TX_COLUMNS} FROM transactions
+         WHERE (ledger_sequence, tx_index) IN (
+           SELECT DISTINCT ledger_sequence, tx_index FROM operations
+           WHERE type_name IN {types:Array(String)}
+             AND (ledger_sequence, tx_index) < ({ledger:UInt32}, {tx:UInt32})
+           ORDER BY ledger_sequence DESC, tx_index DESC LIMIT {limit:UInt32})
+         ORDER BY ledger_sequence DESC, tx_index DESC`,
+        // op type names are our own constants (opFilters.ts)
+        { ...at, types: `[${[...types].map((t) => `'${t}'`).join(",")}]` },
+      )
+    : await chQuery<ChTx>(
+        `SELECT ${TX_COLUMNS} FROM transactions
+         WHERE (ledger_sequence, tx_index) < ({ledger:UInt32}, {tx:UInt32})
+         ORDER BY ledger_sequence DESC, tx_index DESC LIMIT {limit:UInt32}`,
+        at,
+      );
   if (txs.length === 0) return null;
 
-  // the page is one unbroken run of transactions, so its operations are a key range
   const newest = txs[0];
   const oldest = txs[txs.length - 1];
-  const ops = await chQuery<ChOp>(
-    `SELECT ledger_sequence, tx_index, type_name, source_account, details FROM operations
-     WHERE (ledger_sequence, tx_index) >= ({fromLedger:UInt32}, {fromTx:UInt32})
-       AND (ledger_sequence, tx_index) <= ({toLedger:UInt32}, {toTx:UInt32})
-     ORDER BY ledger_sequence, tx_index, op_index`,
-    {
-      fromLedger: oldest.ledger_sequence,
-      fromTx: oldest.tx_index,
-      toLedger: newest.ledger_sequence,
-      toTx: newest.tx_index,
-    },
-  );
+  const ops = types
+    ? await chQuery<ChOp>(
+        `SELECT ledger_sequence, tx_index, type_name, source_account, details FROM operations
+         WHERE (ledger_sequence, tx_index) IN (${tupleList(txs)})
+         ORDER BY ledger_sequence, tx_index, op_index`,
+      )
+    : // unfiltered, the page is one unbroken run of transactions: a key range
+      await chQuery<ChOp>(
+        `SELECT ledger_sequence, tx_index, type_name, source_account, details FROM operations
+         WHERE (ledger_sequence, tx_index) >= ({fromLedger:UInt32}, {fromTx:UInt32})
+           AND (ledger_sequence, tx_index) <= ({toLedger:UInt32}, {toTx:UInt32})
+         ORDER BY ledger_sequence, tx_index, op_index`,
+        {
+          fromLedger: oldest.ledger_sequence,
+          fromTx: oldest.tx_index,
+          toLedger: newest.ledger_sequence,
+          toTx: newest.tx_index,
+        },
+      );
   const opsByTx = new Map<string, IndexedOp[]>();
   for (const op of ops) {
     const key = `${op.ledger_sequence}:${op.tx_index}`;

@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { Horizon, xdr } from "@stellar/stellar-sdk";
 import { horizon } from "./horizon";
-import { matchesFilter, type HistoryFilter } from "./opFilters";
+import { filterTypes, matchesFilter, type HistoryFilter } from "./opFilters";
 import { transactionFlow, type TxFlow } from "./txFlow";
 import { withIndexer } from "./indexer/client";
 import { indexedRecentTransactions } from "./indexer/transactions";
@@ -148,28 +148,29 @@ export async function getRecentTransactions(
   cursor?: string,
   filter: HistoryFilter = "all",
 ): Promise<TxPage> {
-  if (filter === "all") {
-    return withIndexer(
-      "recent transactions",
-      () => indexedRecentTransactions(cursor, PAGE_SIZE),
-      async () => {
-        let call = (await horizon())
-          .transactions()
-          .order("desc")
-          .limit(PAGE_SIZE)
-          .includeFailed(true);
-        if (cursor) call = call.cursor(cursor);
-        const rows = (await call.call()).records.map((r) => toTxRow(r));
-        return {
-          rows,
-          nextCursor: rows.length === PAGE_SIZE ? rows[rows.length - 1].pagingToken : null,
-          scanned: rows.length,
-        };
-      },
-    );
-  }
+  // the indexer filters by op type in one query; Horizon has to scan for it
+  return withIndexer(
+    filter === "all" ? "recent transactions" : `recent transactions (${filter})`,
+    () => indexedRecentTransactions(cursor, PAGE_SIZE, filterTypes(filter)),
+    () => (filter === "all" ? latestTransactions(cursor) : scanRecentTransactions(cursor, filter)),
+  );
+}
 
-  // filtered tabs still scan Horizon, same cursor format either way
+async function latestTransactions(cursor: string | undefined): Promise<TxPage> {
+  let call = (await horizon()).transactions().order("desc").limit(PAGE_SIZE).includeFailed(true);
+  if (cursor) call = call.cursor(cursor);
+  const rows = (await call.call()).records.map((r) => toTxRow(r));
+  return {
+    rows,
+    nextCursor: rows.length === PAGE_SIZE ? rows[rows.length - 1].pagingToken : null,
+    scanned: rows.length,
+  };
+}
+
+async function scanRecentTransactions(
+  cursor: string | undefined,
+  filter: HistoryFilter,
+): Promise<TxPage> {
   const server = await horizon();
   const rows: TxRow[] = [];
   let scanned = 0;
