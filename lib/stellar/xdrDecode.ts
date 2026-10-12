@@ -1,4 +1,5 @@
-import { Address, scValToNative, xdr } from "@stellar/stellar-sdk";
+import { Address, Asset, scValToNative, xdr } from "@stellar/stellar-sdk";
+import type { AssetRef } from "./txFlow";
 
 // defensive decoders: anything that fails to parse returns null and the UI
 // falls back to "view raw"
@@ -140,13 +141,33 @@ export function getSorobanReturnValue(
   }
 }
 
+/**
+ * One transaction's meta, base64, out of a ledger archive file
+ * (LedgerCloseMetaBatch). Null when the hash isn't in that ledger.
+ */
+export function transactionMetaFromLedger(batch: Buffer, hash: string): string | null {
+  try {
+    const lcm = xdr.LedgerCloseMetaBatch.fromXDR(batch).ledgerCloseMeta()[0];
+    if (!lcm) return null;
+    const body = lcm.switch() === 0 ? lcm.v0() : lcm.switch() === 1 ? lcm.v1() : lcm.v2();
+    for (const applied of body.txProcessing()) {
+      if (applied.result().transactionHash().toString("hex") === hash) {
+        return applied.txApplyProcessing().toXDR("base64");
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export interface DecodedContractEvent {
   contractId: string | null;
   topics: DecodedValue[];
   data: DecodedValue;
 }
 
-/** Contract events from result meta (v3; v4 events live elsewhere - best effort). */
+/** Events emitted by the contracts a transaction called. Fee events are separate, see getFeeEvents. */
 export function getSorobanEvents(
   resultMetaXdr: string | undefined,
 ): DecodedContractEvent[] {
@@ -157,12 +178,9 @@ export function getSorobanEvents(
     if (meta.switch() === 3) {
       events = meta.v3().sorobanMeta()?.events() ?? [];
     } else if (meta.switch() === 4) {
-      // v4 splits events: the real contract events (transfer, mint, ...) live
-      // per-operation; events() holds only tx-level fee events. Gather both.
-      const v4 = meta.v4();
-      const opEvents = v4.operations().flatMap((o) => o.events());
-      const txEvents = v4.events().map((e) => e.event());
-      events = [...opEvents, ...txEvents];
+      // v4 splits events: contract events (transfer, mint, ...) live per
+      // operation, the tx-level events() are the network charging the fee
+      events = meta.v4().operations().flatMap((o) => o.events());
     }
     return events.map((event) => {
       let contractId: string | null = null;
@@ -200,13 +218,49 @@ export function getSorobanEvents(
   }
 }
 
+export interface FeeEvents {
+  /** Stroops taken up front. */
+  charged: string;
+  /** Stroops handed back after the transaction ran, "0" when none. */
+  refunded: string;
+}
+
+/**
+ * The fee as the ledger recorded it (meta v4): charged before the transaction,
+ * the unused part refunded after. Null when the meta has no fee events.
+ */
+export function getFeeEvents(resultMetaXdr: string | undefined): FeeEvents | null {
+  if (!resultMetaXdr) return null;
+  try {
+    const meta = xdr.TransactionMeta.fromXDR(resultMetaXdr, "base64");
+    if (meta.switch() !== 4) return null;
+    let charged = 0n;
+    let refunded = 0n;
+    let seen = false;
+    for (const txEvent of meta.v4().events()) {
+      const body = txEvent.event().body().v0();
+      if (scValToNative(body.topics()[0]) !== "fee") continue;
+      const amount = scValToNative(body.data());
+      if (typeof amount !== "bigint") continue;
+      seen = true;
+      if (amount >= 0n) charged += amount;
+      else refunded -= amount;
+    }
+    return seen ? { charged: charged.toString(), refunded: refunded.toString() } : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface TokenMovement {
   account: string;
   direction: "in" | "out";
-  /** raw base units (i128); displayed as a 7-decimal token, the SAC standard. */
+  /** raw base units (i128). 7 decimals when `asset` is set, unknown otherwise. */
   amount: string;
   /** the token contract id. */
   token: string;
+  /** set when the token is a Stellar asset's own contract. */
+  asset?: AssetRef;
   kind: "transfer" | "mint" | "burn" | "clawback";
 }
 
@@ -215,25 +269,75 @@ export interface TokenEventDescription {
   token: string;
   from?: string;
   to?: string;
-  /** raw base units (i128). */
+  /** raw base units (i128). 7 decimals when `asset` is set, unknown otherwise. */
   amount: string;
+  /** set when the token is a Stellar asset's own contract. */
+  asset?: AssetRef;
 }
 
 function scalarText(v: DecodedValue | undefined): string | null {
   return v && v.kind === "scalar" ? v.text : null;
 }
 
+/**
+ * The asset behind `name` ("native" or "CODE:ISSUER"), but only if `contractId`
+ * really is that asset's contract. Any contract can claim a name, the address
+ * can't be faked.
+ */
+export function verifiedStellarAsset(
+  name: string,
+  contractId: string,
+  passphrase: string,
+): AssetRef | undefined {
+  try {
+    if (name === "native") {
+      return Asset.native().contractId(passphrase) === contractId ? { code: "XLM" } : undefined;
+    }
+    const [code, issuer, ...rest] = name.split(":");
+    if (!code || !issuer || rest.length) return undefined;
+    return new Asset(code, issuer).contractId(passphrase) === contractId
+      ? { code, issuer }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// a Stellar asset's contract names its asset in the last topic of its events
+function stellarAsset(event: DecodedContractEvent, passphrase: string): AssetRef | undefined {
+  const last = event.topics[event.topics.length - 1];
+  if (
+    !event.contractId ||
+    event.topics.length < 2 ||
+    last?.kind !== "scalar" ||
+    last.hint !== "string"
+  ) {
+    return undefined;
+  }
+  return verifiedStellarAsset(last.text, event.contractId, passphrase);
+}
+
+// plain i128, or a map with "amount" when the transfer targets a muxed account
+function eventAmount(data: DecodedValue): string | null {
+  const direct = scalarText(data);
+  if (direct !== null) return direct;
+  if (data.kind !== "map") return null;
+  return scalarText(data.entries.find((e) => e.key === "amount")?.value);
+}
+
 // SEP-41 / Stellar Asset Contract token event -> a readable {from, to, amount}.
-// Returns null for anything that is not a recognized token event (fee, custom
+// Returns null for anything that is not a recognized token event (custom
 // events, ...), so the raw topic/data view stays the fallback.
 export function describeTokenEvent(
   event: DecodedContractEvent,
+  passphrase: string,
 ): TokenEventDescription | null {
   if (!event.contractId) return null;
   const name = scalarText(event.topics[0]);
-  const amount = scalarText(event.data);
+  const amount = eventAmount(event.data);
   if (!name || amount === null || !/^-?\d+$/.test(amount)) return null;
   const token = event.contractId;
+  const asset = stellarAsset(event, passphrase);
   const addrs = event.topics
     .slice(1)
     .filter((t) => t.kind === "scalar" && t.hint === "address")
@@ -241,16 +345,16 @@ export function describeTokenEvent(
   switch (name) {
     case "transfer": // topics: transfer, from, to
       if (addrs.length < 2) return null;
-      return { kind: "transfer", token, from: addrs[0], to: addrs[1], amount };
+      return { kind: "transfer", token, from: addrs[0], to: addrs[1], amount, asset };
     case "mint": // mint, [admin], to
       if (!addrs.length) return null;
-      return { kind: "mint", token, to: addrs[addrs.length - 1], amount };
+      return { kind: "mint", token, to: addrs[addrs.length - 1], amount, asset };
     case "burn": // burn, from
       if (!addrs.length) return null;
-      return { kind: "burn", token, from: addrs[0], amount };
+      return { kind: "burn", token, from: addrs[0], amount, asset };
     case "clawback": // clawback, [admin], from
       if (!addrs.length) return null;
-      return { kind: "clawback", token, from: addrs[addrs.length - 1], amount };
+      return { kind: "clawback", token, from: addrs[addrs.length - 1], amount, asset };
     default:
       return null;
   }
@@ -261,15 +365,15 @@ export function describeTokenEvent(
 // nothing but the network fee.
 export function sorobanTokenMovements(
   events: DecodedContractEvent[],
+  passphrase: string,
 ): TokenMovement[] {
   const movements: TokenMovement[] = [];
   for (const event of events) {
-    const d = describeTokenEvent(event);
+    const d = describeTokenEvent(event, passphrase);
     if (!d) continue;
-    if (d.from)
-      movements.push({ account: d.from, direction: "out", amount: d.amount, token: d.token, kind: d.kind });
-    if (d.to)
-      movements.push({ account: d.to, direction: "in", amount: d.amount, token: d.token, kind: d.kind });
+    const { amount, token, asset, kind } = d;
+    if (d.from) movements.push({ account: d.from, direction: "out", amount, token, asset, kind });
+    if (d.to) movements.push({ account: d.to, direction: "in", amount, token, asset, kind });
   }
   return movements;
 }

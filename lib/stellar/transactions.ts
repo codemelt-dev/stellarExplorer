@@ -4,6 +4,8 @@ import { Horizon, xdr } from "@stellar/stellar-sdk";
 import { horizon } from "./horizon";
 import { matchesFilter, type HistoryFilter } from "./opFilters";
 import { transactionFlow, type TxFlow } from "./txFlow";
+import { withIndexer } from "./indexer/client";
+import { indexedRecentTransactions } from "./indexer/transactions";
 
 export type TransactionRecord = Horizon.ServerApi.TransactionRecord;
 export type OperationRecord = Horizon.ServerApi.OperationRecord;
@@ -146,19 +148,29 @@ export async function getRecentTransactions(
   cursor?: string,
   filter: HistoryFilter = "all",
 ): Promise<TxPage> {
-  const server = await horizon();
-
   if (filter === "all") {
-    let call = server.transactions().order("desc").limit(PAGE_SIZE).includeFailed(true);
-    if (cursor) call = call.cursor(cursor);
-    const rows = (await call.call()).records.map((r) => toTxRow(r));
-    return {
-      rows,
-      nextCursor: rows.length === PAGE_SIZE ? rows[rows.length - 1].pagingToken : null,
-      scanned: rows.length,
-    };
+    return withIndexer(
+      "recent transactions",
+      () => indexedRecentTransactions(cursor, PAGE_SIZE),
+      async () => {
+        let call = (await horizon())
+          .transactions()
+          .order("desc")
+          .limit(PAGE_SIZE)
+          .includeFailed(true);
+        if (cursor) call = call.cursor(cursor);
+        const rows = (await call.call()).records.map((r) => toTxRow(r));
+        return {
+          rows,
+          nextCursor: rows.length === PAGE_SIZE ? rows[rows.length - 1].pagingToken : null,
+          scanned: rows.length,
+        };
+      },
+    );
   }
 
+  // filtered tabs still scan Horizon, same cursor format either way
+  const server = await horizon();
   const rows: TxRow[] = [];
   let scanned = 0;
   let last = cursor;

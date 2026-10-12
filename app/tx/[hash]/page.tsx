@@ -28,6 +28,7 @@ import {
 } from "@/lib/stellar/transactions";
 import {
   decodeTxError,
+  getFeeEvents,
   getSorobanEvents,
   getSorobanReturnValue,
   memoDisplay,
@@ -39,6 +40,7 @@ import {
 import { BalanceChanges } from "@/components/tx/BalanceChanges";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getTransactionMetaXdr } from "@/lib/stellar/rpc";
+import { getArchivedMetaXdr } from "@/lib/stellar/archive";
 import { getContractInterface } from "@/lib/stellar/contracts";
 import { humanizeOperation, txTypeLabel } from "@/lib/stellar/humanize";
 import { Badge } from "@/components/ui/badge";
@@ -60,7 +62,8 @@ export default async function TransactionPage({
   params: Promise<{ hash: string }>;
 }) {
   const { hash } = await params;
-  const netLabel = (await activeNetwork()).label.toLowerCase();
+  const network = await activeNetwork();
+  const netLabel = network.label.toLowerCase();
 
   let tx;
   let ops;
@@ -91,17 +94,22 @@ export default async function TransactionPage({
 
   const record = tx as typeof tx & Record<string, unknown>;
   const error = tx.successful ? null : decodeTxError(tx.result_xdr);
-  // Horizon no longer returns result_meta_xdr - fall back to Stellar RPC
-  // (only worth the round-trip for Soroban txs).
+  // Horizon no longer returns result_meta_xdr - fall back to Stellar RPC, then
+  // to the ledger archive (only worth the round-trip for Soroban txs).
   const hasSorobanOp = ops.some(
     (op) => (op.type as string) === "invoke_host_function",
   );
   const resultMetaXdr =
     (record["result_meta_xdr"] as string | undefined) ??
-    (hasSorobanOp ? ((await getTransactionMetaXdr(tx.hash)) ?? undefined) : undefined);
+    (hasSorobanOp
+      ? ((await getTransactionMetaXdr(tx.hash)) ??
+        (await getArchivedMetaXdr(tx.ledger_attr, tx.hash)) ??
+        undefined)
+      : undefined);
   const returnValue = getSorobanReturnValue(resultMetaXdr);
   const events = getSorobanEvents(resultMetaXdr);
-  const tokenMovements = sorobanTokenMovements(events);
+  const tokenMovements = sorobanTokenMovements(events, network.passphrase);
+  const feeEvents = getFeeEvents(resultMetaXdr);
   const memo = memoDisplay(tx.memo_type, tx.memo);
   const feeBump = record["fee_bump_transaction"] as
     | { hash: string }
@@ -278,6 +286,9 @@ export default async function TransactionPage({
               <Amount amount={stroopsToLumens(tx.fee_charged)} />
               <span className="text-xs text-dim">
                 max {stroopsToLumens(tx.max_fee)} XLM offered
+                {feeEvents && feeEvents.refunded !== "0" && (
+                  <> · {stroopsToLumens(feeEvents.refunded)} XLM refunded</>
+                )}
               </span>
             </span>
           </DetailRow>
@@ -365,7 +376,9 @@ export default async function TransactionPage({
       </section>
 
       {/* Contract events */}
-      {events.length > 0 && <ContractEvents events={events} />}
+      {events.length > 0 && (
+        <ContractEvents events={events} passphrase={network.passphrase} />
+      )}
         </TabsContent>
 
         <TabsContent value="balances">

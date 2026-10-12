@@ -2,11 +2,11 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Address } from "@/components/stellar/Address";
 import { Amount } from "@/components/stellar/Amount";
+import { TokenAmount } from "@/components/stellar/TokenAmount";
 import { EmptyState } from "@/components/states/EmptyState";
 import { stroopsToLumens } from "@/lib/stellar/amount";
 import type { EffectRecord } from "@/lib/stellar/transactions";
 import type { TokenMovement } from "@/lib/stellar/xdrDecode";
-import { truncateKey } from "@/lib/stellar/strkey";
 import { cn } from "@/lib/utils";
 
 type AnyEffect = EffectRecord & Record<string, unknown>;
@@ -18,6 +18,8 @@ interface ChangeRow {
   amount: string | null;
   assetCode: string;
   assetIssuer?: string;
+  /** Contract token movement: base units, scaled only when the asset is known. */
+  token?: Pick<TokenMovement, "amount" | "token" | "asset">;
 }
 
 function str(e: AnyEffect, k: string): string {
@@ -142,8 +144,9 @@ function movementRows(movements: TokenMovement[]): ChangeRow[] {
     account: m.account,
     direction: m.direction,
     label: MOVEMENT_LABEL[m.kind][m.direction],
-    amount: stroopsToLumens(m.amount),
-    assetCode: truncateKey(m.token, 4),
+    amount: null,
+    assetCode: "",
+    token: { amount: m.amount, token: m.token, asset: m.asset },
   }));
 }
 
@@ -198,7 +201,18 @@ export function BalanceChanges({
                   row.direction === "out" && "text-fail",
                 )}
               >
-                {row.amount ? (
+                {row.token ? (
+                  <>
+                    {row.direction === "in" ? "+" : "-"}
+                    <TokenAmount
+                      {...row.token}
+                      className={cn(
+                        row.direction === "in" && "text-ok",
+                        row.direction === "out" && "text-fail",
+                      )}
+                    />
+                  </>
+                ) : row.amount ? (
                   <>
                     {row.direction === "in" ? "+" : row.direction === "out" ? "-" : ""}
                     <Amount

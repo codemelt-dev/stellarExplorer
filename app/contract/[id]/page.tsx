@@ -5,17 +5,23 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import { Address } from "@/components/stellar/Address";
 import { Identicon } from "@/components/stellar/Identicon";
 import { CopyButton } from "@/components/stellar/CopyButton";
 import { ScValView } from "@/components/stellar/ScValView";
+import { TokenEventSentence } from "@/components/stellar/TokenEventSentence";
 import { Time } from "@/components/stellar/Time";
 import { EmptyState } from "@/components/states/EmptyState";
+import { ErrorState } from "@/components/states/ErrorState";
 import { activeNetwork } from "@/lib/stellar/network";
 import {
+  getContractCreation,
   getContractEvents,
   getContractInterface,
   getContractSummary,
 } from "@/lib/stellar/contracts";
+import { contractAsset } from "@/lib/stellar/contractDecode";
+import { describeTokenEvent } from "@/lib/stellar/xdrDecode";
 import { truncateKey } from "@/lib/stellar/strkey";
 
 export async function generateMetadata({
@@ -33,13 +39,25 @@ export default async function ContractPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const netLabel = (await activeNetwork()).label.toLowerCase();
+  const network = await activeNetwork();
+  const netLabel = network.label.toLowerCase();
 
-  const [summary, iface, events] = await Promise.all([
-    getContractSummary(id),
-    getContractInterface(id),
-    getContractEvents(id),
-  ]);
+  let summary, iface, events, creation;
+  try {
+    [summary, iface, events, creation] = await Promise.all([
+      getContractSummary(id),
+      getContractInterface(id),
+      getContractEvents(id),
+      getContractCreation(id),
+    ]);
+  } catch {
+    return (
+      <ErrorState
+        message="The indexer didn't respond while loading this contract. Reload the page to retry."
+        className="py-24"
+      />
+    );
+  }
 
   if (!summary) {
     return (
@@ -52,6 +70,8 @@ export default async function ContractPage({
   }
 
   const isSac = summary.executable.kind === "stellarAsset";
+  // which asset this is, when the contract is a Stellar asset's own
+  const asset = contractAsset(summary, network.passphrase);
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,13 +85,13 @@ export default async function ContractPage({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight">
-              {isSac ? "Stellar Asset Contract" : "Contract"}
+              {asset ? asset.code : isSac ? "Stellar Asset Contract" : "Contract"}
             </h1>
             <Badge
               variant="outline"
               className="border-contract/40 font-mono text-[11px] text-contract"
             >
-              {isSac ? "built-in token" : "WASM"}
+              {asset ? "Stellar asset contract" : isSac ? "built-in token" : "WASM"}
             </Badge>
           </div>
           <div className="flex items-center gap-1.5">
@@ -80,6 +100,17 @@ export default async function ContractPage({
             </span>
             <CopyButton value={id} label="Copy contract address" />
           </div>
+          {asset && (
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-sm text-dim">
+              {asset.issuer ? (
+                <>
+                  issued by <Address address={asset.issuer} />
+                </>
+              ) : (
+                "The network's native asset"
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -127,6 +158,24 @@ export default async function ContractPage({
             </span>
           </div>
         )}
+        {creation && (
+          <>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-wider text-dim">
+                Created
+              </span>
+              <Link href={`/ledger/${creation.ledger}`} className="rounded-sm text-sm">
+                <Time iso={creation.createdAt} className="hover:text-foreground" />
+              </Link>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-wider text-dim">
+                Created by
+              </span>
+              <Address address={creation.creator} />
+            </div>
+          </>
+        )}
       </Card>
 
       <Tabs defaultValue="events">
@@ -139,43 +188,58 @@ export default async function ContractPage({
         <TabsContent value="events" className="mt-4">
           <Card className="gap-4 p-5">
             {events === null ? (
-              <EmptyState message="Couldn't reach Stellar RPC for events. Try again in a moment." />
+              <EmptyState message="Couldn't load events for this contract. Try again in a moment." />
             ) : events.length === 0 ? (
-              <EmptyState message="No events in the recent ledger window. This contract hasn't emitted anything lately. Full history needs an indexer (roadmap)." />
+              <EmptyState message="No recent events. This contract hasn't emitted anything lately." />
             ) : (
               <div className="flex flex-col">
-                {events.map((event, i) => (
-                  <div
-                    key={`${event.txHash}-${i}`}
-                    className="flex flex-col gap-1.5 border-b border-border py-3 first:pt-0 last:border-b-0 last:pb-0"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="flex flex-wrap gap-1">
-                        {event.topics.map((topic, j) => (
-                          <span
-                            key={j}
-                            className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-contract"
-                          >
-                            <ScValView value={topic} />
-                          </span>
-                        ))}
-                      </span>
-                      <Link
-                        href={`/tx/${event.txHash}`}
-                        className="shrink-0 rounded-sm"
-                        aria-label="View transaction"
-                      >
-                        <Time
-                          iso={event.createdAt}
-                          className="hover:text-foreground"
-                        />
-                      </Link>
+                {events.map((event, i) => {
+                  const token = describeTokenEvent(
+                    { contractId: id, topics: event.topics, data: event.data },
+                    network.passphrase,
+                  );
+                  const when = (
+                    <Link
+                      href={`/tx/${event.txHash}`}
+                      className="shrink-0 rounded-sm"
+                      aria-label="View transaction"
+                    >
+                      <Time iso={event.createdAt} className="hover:text-foreground" />
+                    </Link>
+                  );
+                  return (
+                    <div
+                      key={`${event.txHash}-${i}`}
+                      className="flex flex-col gap-1.5 border-b border-border py-3 first:pt-0 last:border-b-0 last:pb-0"
+                    >
+                      {token ? (
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                          <TokenEventSentence event={token} />
+                          {when}
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="flex flex-wrap gap-1">
+                              {event.topics.map((topic, j) => (
+                                <span
+                                  key={j}
+                                  className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-contract"
+                                >
+                                  <ScValView value={topic} />
+                                </span>
+                              ))}
+                            </span>
+                            {when}
+                          </div>
+                          <div className="pl-1">
+                            <ScValView value={event.data} />
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <div className="pl-1">
-                      <ScValView value={event.data} />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </Card>

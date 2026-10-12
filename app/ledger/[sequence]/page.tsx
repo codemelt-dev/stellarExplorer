@@ -66,11 +66,6 @@ export default async function LedgerPage({
     );
   }
 
-  const record = ledger as typeof ledger & {
-    successful_transaction_count?: number;
-    failed_transaction_count?: number;
-  };
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -94,25 +89,25 @@ export default async function LedgerPage({
 
       <Card className="flex-row flex-wrap gap-x-10 gap-y-4 p-5">
         <Meta label="Closed">
-          <Time iso={ledger.closed_at} className="text-foreground" />
+          <Time iso={ledger.closedAt} className="text-foreground" />
         </Meta>
         <Meta label="Transactions">
           <span className="font-mono text-sm">
-            <span className="text-ok">{record.successful_transaction_count ?? "–"} ok</span>
+            <span className="text-ok">{ledger.txOk} ok</span>
             {" · "}
-            <span className={record.failed_transaction_count ? "text-fail" : "text-dim"}>
-              {record.failed_transaction_count ?? 0} failed
+            <span className={ledger.txFailed ? "text-fail" : "text-dim"}>
+              {ledger.txFailed} failed
             </span>
           </span>
         </Meta>
         <Meta label="Operations">
-          <span className="font-mono text-sm">{ledger.operation_count}</span>
+          <span className="font-mono text-sm">{ledger.opCount}</span>
         </Meta>
         <Meta label="Base fee">
-          <Amount amount={stroopsToLumens(ledger.base_fee_in_stroops)} />
+          <Amount amount={stroopsToLumens(ledger.baseFeeStroops)} />
         </Meta>
         <Meta label="Protocol">
-          <span className="font-mono text-sm">v{ledger.protocol_version}</span>
+          <span className="font-mono text-sm">v{ledger.protocol}</span>
         </Meta>
         <Meta label="Hash">
           <span className="inline-flex items-center gap-1.5">
@@ -153,14 +148,14 @@ export default async function LedgerPage({
                     {truncateKey(tx.hash, 6)}
                   </Link>
                   <span className="hidden text-sm text-dim sm:inline">
-                    {tx.operation_count} op{tx.operation_count === 1 ? "" : "s"}
+                    {tx.opCount} op{tx.opCount === 1 ? "" : "s"}
                   </span>
                   <span className="hidden md:inline">
-                    <Address address={tx.source_account} />
+                    <Address address={tx.source} />
                   </span>
                 </div>
                 <Amount
-                  amount={stroopsToLumens(tx.fee_charged)}
+                  amount={stroopsToLumens(tx.feeStroops)}
                   className="text-dim"
                 />
               </div>
