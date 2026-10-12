@@ -6,6 +6,7 @@ import { TokenAmount } from "@/components/stellar/TokenAmount";
 import { EmptyState } from "@/components/states/EmptyState";
 import { stroopsToLumens } from "@/lib/stellar/amount";
 import type { EffectRecord } from "@/lib/stellar/transactions";
+import type { TokenInfo } from "@/lib/stellar/contractDecode";
 import type { TokenMovement } from "@/lib/stellar/xdrDecode";
 import { cn } from "@/lib/utils";
 
@@ -153,12 +154,15 @@ function movementRows(movements: TokenMovement[]): ChangeRow[] {
 export function BalanceChanges({
   effects,
   sorobanMovements = [],
+  tokens = {},
   feeCharged,
   feeAccount,
   successful,
 }: {
   effects: EffectRecord[];
   sorobanMovements?: TokenMovement[];
+  /** Self-reported symbol and decimals of the tokens involved, by contract id. */
+  tokens?: Record<string, TokenInfo | null>;
   feeCharged: string;
   feeAccount: string;
   successful: boolean;
@@ -206,6 +210,7 @@ export function BalanceChanges({
                     {row.direction === "in" ? "+" : "-"}
                     <TokenAmount
                       {...row.token}
+                      info={tokens[row.token.token]}
                       className={cn(
                         row.direction === "in" && "text-ok",
                         row.direction === "out" && "text-fail",

@@ -7,15 +7,19 @@ import { toDecodedValue, type DecodedValue } from "./xdrDecode";
 import {
   instanceSummary,
   specFunctions,
+  tokenMetadata,
   type ContractFunction,
   type ContractSummary,
+  type TokenInfo,
 } from "./contractDecode";
 import { indexerActive, withIndexer } from "./indexer/client";
 import {
   indexedContractCreation,
   indexedContractEvents,
   indexedContractInterface,
+  indexedContractStorage,
   indexedContractSummary,
+  indexedContractWasm,
 } from "./indexer/contracts";
 
 async function rpcServer(): Promise<Server | null> {
@@ -85,6 +89,90 @@ export const getContractSummary = cache(
     return summary;
   },
 );
+
+export interface ContractStorageEntry {
+  keyHash: string;
+  durability: "persistent" | "temporary";
+  key: DecodedValue;
+  value: DecodedValue;
+  /** Ledger until which the entry lives, null when unknown. */
+  liveUntilLedger: number | null;
+  expired: boolean;
+}
+
+export interface ContractStoragePage {
+  entries: ContractStorageEntry[];
+  /** Key hash to continue from, null on the last page. */
+  next: string | null;
+}
+
+/**
+ * Persistent and temporary entries, a page at a time. Only the indexer can
+ * list them (RPC needs each key up front), so null everywhere else.
+ */
+export const getContractStorage = cache(
+  async (contractId: string, after?: string): Promise<ContractStoragePage | null> => {
+    if (!StrKey.isValidContract(contractId) || !(await indexerActive())) return null;
+    if (after && !/^[0-9a-f]{64}$/.test(after)) return null;
+    try {
+      return await indexedContractStorage(contractId, after);
+    } catch (error) {
+      console.warn(
+        "[indexer] contract storage failed:",
+        error instanceof Error ? error.message : error,
+      );
+      return null;
+    }
+  },
+);
+
+async function rpcContractWasm(contractId: string): Promise<{ hash: string; wasm: Buffer } | null> {
+  const server = await rpcServer();
+  const summary = await rpcContractSummary(contractId);
+  if (!server || summary?.executable.kind !== "wasm") return null;
+  try {
+    const hash = summary.executable.wasmHash;
+    const key = xdr.LedgerKey.contractCode(
+      new xdr.LedgerKeyContractCode({ hash: Buffer.from(hash, "hex") }),
+    );
+    const entry = (await server.getLedgerEntries(key)).entries[0];
+    return entry ? { hash, wasm: Buffer.from(entry.val.contractCode().code()) } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The contract's compiled code and its hash, or null (asset contract, not found, source down). */
+export async function getContractWasm(
+  contractId: string,
+): Promise<{ hash: string; wasm: Buffer } | null> {
+  if (!StrKey.isValidContract(contractId)) return null;
+  return withIndexer(
+    `contract ${contractId.slice(0, 6)} wasm`,
+    () => indexedContractWasm(contractId),
+    () => rpcContractWasm(contractId),
+  );
+}
+
+// a token's symbol and decimals don't change from view to view
+const tokenCache = new Map<string, { expires: number; value: TokenInfo | null }>();
+
+/** Symbol and decimals a token contract reports about itself, or null. Never throws. */
+export const getTokenInfo = cache(async (contractId: string): Promise<TokenInfo | null> => {
+  const cacheKey = `${(await activeNetwork()).id}:${contractId}`;
+  const cached = tokenCache.get(cacheKey);
+  if (cached && cached.expires > Date.now()) return cached.value;
+  let value: TokenInfo | null = null;
+  try {
+    const summary = await getContractSummary(contractId);
+    value = (summary && tokenMetadata(summary)) ?? null;
+  } catch {
+    // source down: say nothing rather than cache a miss
+    return null;
+  }
+  tokenCache.set(cacheKey, { expires: Date.now() + 600_000, value });
+  return value;
+});
 
 /** Who deployed it and when. Only the indexer knows, and only since its go-live. */
 export const getContractCreation = cache(

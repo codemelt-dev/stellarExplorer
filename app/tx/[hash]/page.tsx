@@ -41,7 +41,7 @@ import { BalanceChanges } from "@/components/tx/BalanceChanges";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getTransactionMetaXdr } from "@/lib/stellar/rpc";
 import { getArchivedMetaXdr } from "@/lib/stellar/archive";
-import { getContractInterface } from "@/lib/stellar/contracts";
+import { getContractInterface, getTokenInfo } from "@/lib/stellar/contracts";
 import { humanizeOperation, txTypeLabel } from "@/lib/stellar/humanize";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -110,6 +110,13 @@ export default async function TransactionPage({
   const events = getSorobanEvents(resultMetaXdr);
   const tokenMovements = sorobanTokenMovements(events, network.passphrase);
   const feeEvents = getFeeEvents(resultMetaXdr);
+  // tokens that aren't Stellar assets: ask each contract for its symbol and decimals
+  const otherTokens = [...new Set(tokenMovements.filter((m) => !m.asset).map((m) => m.token))];
+  const tokens = Object.fromEntries(
+    await Promise.all(
+      otherTokens.slice(0, 8).map(async (id) => [id, await getTokenInfo(id)] as const),
+    ),
+  );
   const memo = memoDisplay(tx.memo_type, tx.memo);
   const feeBump = record["fee_bump_transaction"] as
     | { hash: string }
@@ -377,7 +384,7 @@ export default async function TransactionPage({
 
       {/* Contract events */}
       {events.length > 0 && (
-        <ContractEvents events={events} passphrase={network.passphrase} />
+        <ContractEvents events={events} passphrase={network.passphrase} tokens={tokens} />
       )}
         </TabsContent>
 
@@ -385,6 +392,7 @@ export default async function TransactionPage({
           <BalanceChanges
             effects={effects}
             sorobanMovements={tokenMovements}
+            tokens={tokens}
             feeCharged={String(tx.fee_charged)}
             feeAccount={feeAccount}
             successful={tx.successful}

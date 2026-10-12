@@ -10,14 +10,22 @@ export function formatAmount(amount: string): { int: string; frac: string } {
   return { int: (negative ? "-" : "") + grouped, frac };
 }
 
-// stroops -> decimal string, e.g. 15000000 -> "1.5". Bigint math, floats lose precision
-export function stroopsToLumens(stroops: bigint | string | number): string {
-  const value = typeof stroops === "bigint" ? stroops : BigInt(stroops);
+// base units -> decimal string at a token's own precision, e.g. (1500, 3) -> "1.5".
+// Bigint math, floats lose precision
+export function unitsToDecimal(units: bigint | string | number, decimals: number): string {
+  const value = typeof units === "bigint" ? units : BigInt(units);
   const negative = value < 0n;
   const abs = negative ? -value : value;
-  const int = abs / STROOPS_PER_LUMEN;
-  const frac = (abs % STROOPS_PER_LUMEN).toString().padStart(7, "0").replace(/0+$/, "");
+  const scale = 10n ** BigInt(decimals);
+  const int = abs / scale;
+  const frac =
+    decimals > 0 ? (abs % scale).toString().padStart(decimals, "0").replace(/0+$/, "") : "";
   return `${negative ? "-" : ""}${int}${frac ? `.${frac}` : ""}`;
+}
+
+// stroops -> decimal string, e.g. 15000000 -> "1.5"
+export function stroopsToLumens(stroops: bigint | string | number): string {
+  return unitsToDecimal(stroops, 7);
 }
 
 // "37.3331825" -> "37.3332" at 4 decimals. Half-up on the digit string, bigint so no float drift

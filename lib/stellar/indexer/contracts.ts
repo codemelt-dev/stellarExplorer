@@ -10,7 +10,12 @@ import {
   type ContractFunction,
   type ContractSummary,
 } from "../contractDecode";
-import type { ContractCreation, ContractEventItem } from "../contracts";
+import type {
+  ContractCreation,
+  ContractEventItem,
+  ContractStorageEntry,
+  ContractStoragePage,
+} from "../contracts";
 
 // the API sends binary as base64; plain Postgres would send \x-prefixed hex
 function bytes(value: string): Buffer {
@@ -56,18 +61,70 @@ export const indexedContractSummary = cache(
   },
 );
 
+/** The contract's compiled code. Null for asset contracts or when the code isn't stored. */
+export const indexedContractWasm = cache(
+  async (contractId: string): Promise<{ hash: string; wasm: Buffer } | null> => {
+    const summary = await indexedContractSummary(contractId);
+    if (summary?.executable.kind !== "wasm") return null;
+    const hash = summary.executable.wasmHash;
+    const [row] = await apiGet<{ wasm: string }>("contract_wasm", {
+      code_hash: `eq.${hash}`,
+      select: "wasm",
+    });
+    return row ? { hash, wasm: bytes(row.wasm) } : null;
+  },
+);
+
 /** Function signatures parsed from the stored Wasm. Null for asset contracts or missing code. */
 export async function indexedContractInterface(
   contractId: string,
 ): Promise<ContractFunction[] | null> {
-  const summary = await indexedContractSummary(contractId);
-  if (summary?.executable.kind !== "wasm") return null;
-  const [row] = await apiGet<{ wasm: string }>("contract_wasm", {
-    code_hash: `eq.${summary.executable.wasmHash}`,
-    select: "wasm",
+  const code = await indexedContractWasm(contractId);
+  return code ? specFunctions(contract.Spec.fromWasm(code.wasm)) : null;
+}
+
+interface ApiEntry {
+  key_hash: string;
+  durability: string;
+  key: unknown;
+  val: unknown;
+  live_until_ledger: number | null;
+  expired: boolean | null;
+}
+
+const STORAGE_PAGE = 50;
+
+/**
+ * A contract's persistent and temporary entries, in key hash order (the only
+ * order the store pages by). `after` is the last key hash already shown.
+ */
+export async function indexedContractStorage(
+  contractId: string,
+  after?: string,
+): Promise<ContractStoragePage> {
+  const rows = await apiGet<ApiEntry>("contract_data", {
+    contract_id: `eq.${contractId}`,
+    select: "key_hash,durability,key,val,live_until_ledger,expired",
+    order: "key_hash",
+    limit: String(STORAGE_PAGE),
+    ...(after ? { key_hash: `gt.${after}` } : {}),
   });
-  if (!row) return null;
-  return specFunctions(contract.Spec.fromWasm(bytes(row.wasm)));
+  // the instance entry lives in the same table and has its own section
+  const instance = instanceKeyHash(contractId);
+  const entries: ContractStorageEntry[] = rows
+    .filter((row) => row.key_hash !== instance)
+    .map((row) => ({
+      keyHash: row.key_hash,
+      durability: row.durability === "temporary" ? "temporary" : "persistent",
+      key: fromScJson(row.key),
+      value: fromScJson(row.val),
+      liveUntilLedger: row.live_until_ledger === null ? null : Number(row.live_until_ledger),
+      expired: Boolean(row.expired),
+    }));
+  return {
+    entries,
+    next: rows.length === STORAGE_PAGE ? rows[rows.length - 1].key_hash : null,
+  };
 }
 
 interface ChEvent {

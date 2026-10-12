@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Networks } from "@stellar/stellar-sdk";
-import { contractAsset, fromScJson, type ContractSummary } from "./contractDecode";
+import { contractAsset, fromScJson, tokenMetadata, type ContractSummary } from "./contractDecode";
+import type { DecodedValue } from "./xdrDecode";
 
 const G = "GC2B2DF4UJUT454A5DFY5QBUMNQ6S2PRKZGPFDZBJ6DVRO5LVMXOQEJL";
 
@@ -100,5 +101,47 @@ describe("contractAsset", () => {
 
   it("a custom contract can't name itself an asset", () => {
     expect(contractAsset(summary(USDC_SAC, `USDC:${ISSUER}`, "wasm"), Networks.PUBLIC)).toBeUndefined();
+  });
+});
+
+describe("tokenMetadata", () => {
+  const token = (fields: Record<string, DecodedValue>): ContractSummary => ({
+    contractId: "CDMJRRH5MAJLB7T5SQAWQOOL7UJ3BABGTURSVKIE6AEDSXESDDJIBVCT",
+    executable: { kind: "wasm", wasmHash: "00" },
+    instanceStorage: [
+      {
+        key: "METADATA",
+        value: { kind: "map", entries: Object.entries(fields).map(([key, value]) => ({ key, value })) },
+      },
+    ],
+    lastModifiedLedger: null,
+    liveUntilLedger: null,
+  });
+  const n = (text: string): DecodedValue => ({ kind: "scalar", text, hint: "number" });
+  const s = (text: string): DecodedValue => ({ kind: "scalar", text, hint: "string" });
+
+  it("reads symbol, name and decimals", () => {
+    expect(tokenMetadata(token({ decimal: n("18"), name: s("Wrapped Ether"), symbol: s("WETH") }))).toEqual({
+      symbol: "WETH",
+      decimals: 18,
+      name: "Wrapped Ether",
+    });
+  });
+
+  it("accepts the plural field name too", () => {
+    expect(tokenMetadata(token({ decimals: n("6"), name: s("Tether"), symbol: s("USDT") }))?.decimals).toBe(6);
+  });
+
+  it("trims and strips whatever a contract put in its symbol", () => {
+    const info = tokenMetadata(token({ decimal: n("7"), symbol: s("  US‮DC-very-long-symbol-name  ") }));
+    expect(info?.symbol).toBe("USDC-very-lo");
+    expect(info?.name).toBeNull();
+  });
+
+  it("nothing usable: undefined", () => {
+    expect(tokenMetadata(token({ decimal: n("7") }))).toBeUndefined();
+    expect(tokenMetadata(token({ decimal: n("99"), symbol: s("X") }))).toBeUndefined();
+    expect(tokenMetadata(token({ decimal: s("abc"), symbol: s("X") }))).toBeUndefined();
+    expect(tokenMetadata({ ...token({}), instanceStorage: [] })).toBeUndefined();
   });
 });

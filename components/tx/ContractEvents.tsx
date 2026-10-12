@@ -3,6 +3,7 @@ import { Separator } from "@/components/ui/separator";
 import { Address } from "@/components/stellar/Address";
 import { ScValView } from "@/components/stellar/ScValView";
 import { TokenEventSentence } from "@/components/stellar/TokenEventSentence";
+import type { TokenInfo } from "@/lib/stellar/contractDecode";
 import {
   describeTokenEvent,
   type DecodedContractEvent,
@@ -13,8 +14,11 @@ import {
 export function ContractEvents({
   events,
   passphrase,
+  tokens = {},
 }: {
   events: DecodedContractEvent[];
+  /** Self-reported symbol and decimals of the tokens involved, by contract id. */
+  tokens?: Record<string, TokenInfo | null>;
   /** Network passphrase, to tell a Stellar asset's contract from a lookalike. */
   passphrase: string;
 }) {
@@ -33,7 +37,7 @@ export function ContractEvents({
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                   <span className="font-mono text-xs text-dim">#{i}</span>
                   {event.contractId && <Address address={event.contractId} />}
-                  <TokenEventSentence event={d} />
+                  <TokenEventSentence event={d} info={tokens[d.token]} />
                 </div>
               ) : (
                 <>

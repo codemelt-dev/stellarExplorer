@@ -4,17 +4,20 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { formatAmount, stroopsToLumens } from "@/lib/stellar/amount";
+import { formatAmount, stroopsToLumens, unitsToDecimal } from "@/lib/stellar/amount";
+import type { TokenInfo } from "@/lib/stellar/contractDecode";
 import { truncateKey } from "@/lib/stellar/strkey";
 import type { AssetRef } from "@/lib/stellar/txFlow";
 import { cn } from "@/lib/utils";
 
-// amount out of a token contract event. Stellar assets have 7 decimals; any
-// other token's decimals aren't in the event, so its units show unscaled
-// rather than as a number that could be off by orders of magnitude
+// amount out of a token contract event, three levels of certainty:
+// a Stellar asset (7 decimals, issuer known), a token that reports its own
+// symbol and decimals, or neither, where the base units show unscaled rather
+// than as a number that could be off by orders of magnitude
 export function TokenAmount({
   amount,
   asset,
+  info,
   token,
   className,
 }: {
@@ -22,7 +25,9 @@ export function TokenAmount({
   amount: string;
   /** Set when the token is a Stellar asset's own contract. */
   asset?: AssetRef;
-  /** Token contract id, named in the hint when the asset is unknown. */
+  /** What the token contract reports about itself. */
+  info?: TokenInfo | null;
+  /** Token contract id, named in the hover text. */
   token?: string;
   className?: string;
 }) {
@@ -36,6 +41,17 @@ export function TokenAmount({
       />
     );
   }
+  const contract = token ? `token contract ${truncateKey(token, 4)}` : "the token contract";
+  if (info) {
+    return (
+      <Amount
+        amount={unitsToDecimal(amount, info.decimals)}
+        assetCode={info.symbol}
+        assetHint={`Symbol as reported by ${contract}. Not a Stellar asset, check the contract address.`}
+        className={className}
+      />
+    );
+  }
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -45,8 +61,8 @@ export function TokenAmount({
       </TooltipTrigger>
       <TooltipContent>
         <span className="text-xs">
-          Smallest units of {token ? `token ${truncateKey(token, 4)}` : "this token"}. Its
-          decimals aren&apos;t part of the event, so the amount is shown unscaled.
+          Smallest units of {token ? `token ${truncateKey(token, 4)}` : "this token"}. It
+          doesn&apos;t publish its decimals, so the amount is shown unscaled.
         </span>
       </TooltipContent>
     </Tooltip>

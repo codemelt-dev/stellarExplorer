@@ -2,11 +2,19 @@ import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Address } from "@/components/stellar/Address";
 import { TokenAmount } from "@/components/stellar/TokenAmount";
+import type { TokenInfo } from "@/lib/stellar/contractDecode";
 import type { TokenEventDescription } from "@/lib/stellar/xdrDecode";
 
 // a token event as a sentence: what happened, between whom, how much.
 // Renders inline pieces, the caller owns the row
-export function TokenEventSentence({ event }: { event: TokenEventDescription }) {
+export function TokenEventSentence({
+  event,
+  info,
+}: {
+  event: TokenEventDescription;
+  /** The token's own symbol and decimals, used when it isn't a Stellar asset. */
+  info?: TokenInfo | null;
+}) {
   return (
     <>
       <Badge variant="outline" className="w-fit font-mono text-[11px] text-contract">
@@ -31,7 +39,13 @@ export function TokenEventSentence({ event }: { event: TokenEventDescription }) 
           <Address address={event.from!} />
         </>
       )}
-      <TokenAmount amount={event.amount} asset={event.asset} className="ml-auto" />
+      <TokenAmount
+        amount={event.amount}
+        asset={event.asset}
+        info={info}
+        token={event.token}
+        className="ml-auto"
+      />
     </>
   );
 }

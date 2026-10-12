@@ -73,6 +73,36 @@ export function contractAsset(summary: ContractSummary, passphrase: string): Ass
   return verifiedStellarAsset(name.text, summary.contractId, passphrase);
 }
 
+/** What a token contract says about itself. The symbol is its own claim, not verified. */
+export interface TokenInfo {
+  symbol: string;
+  decimals: number;
+  name: string | null;
+}
+
+// printable ASCII only and short: this text comes straight from a contract
+function clean(text: string, max: number): string {
+  return text.replace(/[^\x20-\x7E]/g, "").trim().slice(0, max);
+}
+
+/**
+ * Symbol and decimals a token keeps under METADATA in its instance storage:
+ * the layout of the standard token SDK ("decimal") and of OpenZeppelin's
+ * tokens ("decimals"). Undefined for contracts that store it any other way.
+ */
+export function tokenMetadata(summary: ContractSummary): TokenInfo | undefined {
+  const metadata = summary.instanceStorage.find((e) => e.key === "METADATA")?.value;
+  if (metadata?.kind !== "map") return undefined;
+  const field = (key: string) => {
+    const value = metadata.entries.find((e) => e.key === key)?.value;
+    return value?.kind === "scalar" ? value.text : undefined;
+  };
+  const decimals = Number(field("decimal") ?? field("decimals"));
+  const symbol = clean(field("symbol") ?? "", 12);
+  if (!symbol || !Number.isInteger(decimals) || decimals < 0 || decimals > 38) return undefined;
+  return { symbol, decimals, name: clean(field("name") ?? "", 40) || null };
+}
+
 function scSpecTypeName(type: xdr.ScSpecTypeDef): string {
   const name = type.switch().name.replace(/^scSpecType/, "");
   try {
