@@ -170,6 +170,49 @@ export async function indexedContractEvents(contractId: string): Promise<Contrac
   }));
 }
 
+export interface IndexedContract {
+  contract_id: string;
+  wasm_hash: string | null;
+  /** Asset key when this is a Stellar asset's contract. */
+  asset: string | null;
+}
+
+const CONTRACT_COLUMNS = "contract_id,wasm_hash,asset";
+
+/** Every contract in address order, the only order the store pages by. */
+export async function indexedContracts(
+  after: string | undefined,
+  limit: number,
+): Promise<IndexedContract[]> {
+  return apiGet<IndexedContract>("contracts", {
+    select: CONTRACT_COLUMNS,
+    order: "contract_id",
+    limit: String(limit),
+    ...(after ? { contract_id: `gt.${after}` } : {}),
+  });
+}
+
+export async function indexedContractsById(ids: string[]): Promise<IndexedContract[]> {
+  if (ids.length === 0) return [];
+  return apiGet<IndexedContract>("contracts", {
+    select: CONTRACT_COLUMNS,
+    contract_id: `in.(${ids.join(",")})`,
+  });
+}
+
+/** Contracts with the most calls over the last day. */
+export async function indexedActiveContracts(
+  limit: number,
+): Promise<Array<{ contractId: string; calls: number }>> {
+  const rows = await chQuery<{ contract_id: string; calls: string | number }>(
+    `SELECT contract_id, count() AS calls FROM contract_calls
+     WHERE closed_at >= now() - INTERVAL 1 DAY
+     GROUP BY contract_id ORDER BY calls DESC LIMIT {limit:UInt32}`,
+    { limit },
+  );
+  return rows.map((r) => ({ contractId: r.contract_id, calls: Number(r.calls) }));
+}
+
 interface ChCreation {
   creator: string;
   closed_ts: number;

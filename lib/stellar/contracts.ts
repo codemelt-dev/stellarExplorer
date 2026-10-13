@@ -13,9 +13,13 @@ import {
   type TokenInfo,
 } from "./contractDecode";
 import { indexerActive, withIndexer } from "./indexer/client";
+import { fromAssetKey, type AssetIdentity } from "./assetId";
 import {
+  indexedActiveContracts,
   indexedContractCreation,
   indexedContractEvents,
+  indexedContracts,
+  indexedContractsById,
   indexedContractInterface,
   indexedContractStorage,
   indexedContractSummary,
@@ -152,6 +156,78 @@ export async function getContractWasm(
     () => indexedContractWasm(contractId),
     () => rpcContractWasm(contractId),
   );
+}
+
+export interface ContractListRow {
+  contractId: string;
+  /** Hash of its code, null for a Stellar asset's contract. */
+  wasmHash: string | null;
+  /** The asset it stands for, when it is a Stellar asset's contract. */
+  asset: AssetIdentity | null;
+  /** Calls in the last day, on the activity ranking only. */
+  calls: number | null;
+}
+
+export interface ContractDirectoryPage {
+  rows: ContractListRow[];
+  nextCursor: string | null;
+}
+
+const DIRECTORY_PAGE = 50;
+
+/**
+ * Contracts from the indexer: the busiest of the last day, or all of them in
+ * address order. Null where there is no indexer (testnet); throws when it fails.
+ */
+export async function getContractDirectory(
+  view: "active" | "all",
+  cursor?: string,
+): Promise<ContractDirectoryPage | null> {
+  if (!(await indexerActive())) return null;
+
+  if (view === "all") {
+    const after = cursor && StrKey.isValidContract(cursor) ? cursor : undefined;
+    const found = await indexedContracts(after, DIRECTORY_PAGE);
+    return {
+      rows: found.map((c) => ({
+        contractId: c.contract_id,
+        wasmHash: c.wasm_hash,
+        asset: c.asset ? fromAssetKey(c.asset) : null,
+        calls: null,
+      })),
+      nextCursor:
+        found.length === DIRECTORY_PAGE ? found[found.length - 1].contract_id : null,
+    };
+  }
+
+  const active = (await indexedActiveContracts(DIRECTORY_PAGE)).filter((c) =>
+    StrKey.isValidContract(c.contractId),
+  );
+  // what each one is comes from current state; a miss there just leaves the type blank
+  let known = new Map<string, { wasmHash: string | null; asset: AssetIdentity | null }>();
+  try {
+    const details = await indexedContractsById(active.map((c) => c.contractId));
+    known = new Map(
+      details.map((c) => [
+        c.contract_id,
+        { wasmHash: c.wasm_hash, asset: c.asset ? fromAssetKey(c.asset) : null },
+      ]),
+    );
+  } catch (error) {
+    console.warn(
+      "[indexer] contract types failed:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+  return {
+    rows: active.map((c) => ({
+      contractId: c.contractId,
+      wasmHash: known.get(c.contractId)?.wasmHash ?? null,
+      asset: known.get(c.contractId)?.asset ?? null,
+      calls: c.calls,
+    })),
+    nextCursor: null,
+  };
 }
 
 // a token's symbol and decimals don't change from view to view
