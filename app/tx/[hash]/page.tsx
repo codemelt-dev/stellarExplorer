@@ -7,6 +7,8 @@ import { DetailGroup, DetailList, DetailRow } from "@/components/tx/DetailList";
 import { FlowTarget } from "@/components/tx/FlowTarget";
 import { OpSentence } from "@/components/stellar/OpSentence";
 import { OpCard } from "@/components/tx/OpCard";
+import { OpJump } from "@/components/tx/OpJump";
+import { PagedList } from "@/components/layout/PagedList";
 import { Address } from "@/components/stellar/Address";
 import { Time } from "@/components/stellar/Time";
 import { Amount } from "@/components/stellar/Amount";
@@ -27,6 +29,7 @@ import {
 } from "@/lib/stellar/transactions";
 import {
   decodeTxError,
+  getFeeEvents,
   getSorobanEvents,
   getSorobanReturnValue,
   memoDisplay,
@@ -38,7 +41,8 @@ import {
 import { BalanceChanges } from "@/components/tx/BalanceChanges";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getTransactionMetaXdr } from "@/lib/stellar/rpc";
-import { getContractInterface } from "@/lib/stellar/contracts";
+import { getArchivedMetaXdr } from "@/lib/stellar/archive";
+import { getContractInterface, getTokenInfo } from "@/lib/stellar/contracts";
 import { humanizeOperation, txTypeLabel } from "@/lib/stellar/humanize";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -59,7 +63,8 @@ export default async function TransactionPage({
   params: Promise<{ hash: string }>;
 }) {
   const { hash } = await params;
-  const netLabel = (await activeNetwork()).label.toLowerCase();
+  const network = await activeNetwork();
+  const netLabel = network.label.toLowerCase();
 
   let tx;
   let ops;
@@ -90,17 +95,29 @@ export default async function TransactionPage({
 
   const record = tx as typeof tx & Record<string, unknown>;
   const error = tx.successful ? null : decodeTxError(tx.result_xdr);
-  // Horizon no longer returns result_meta_xdr - fall back to Stellar RPC
-  // (only worth the round-trip for Soroban txs).
+  // Horizon no longer returns result_meta_xdr - fall back to Stellar RPC, then
+  // to the ledger archive (only worth the round-trip for Soroban txs).
   const hasSorobanOp = ops.some(
     (op) => (op.type as string) === "invoke_host_function",
   );
   const resultMetaXdr =
     (record["result_meta_xdr"] as string | undefined) ??
-    (hasSorobanOp ? ((await getTransactionMetaXdr(tx.hash)) ?? undefined) : undefined);
+    (hasSorobanOp
+      ? ((await getTransactionMetaXdr(tx.hash)) ??
+        (await getArchivedMetaXdr(tx.ledger_attr, tx.hash)) ??
+        undefined)
+      : undefined);
   const returnValue = getSorobanReturnValue(resultMetaXdr);
   const events = getSorobanEvents(resultMetaXdr);
-  const tokenMovements = sorobanTokenMovements(events);
+  const tokenMovements = sorobanTokenMovements(events, network.passphrase);
+  const feeEvents = getFeeEvents(resultMetaXdr);
+  // tokens that aren't Stellar assets: ask each contract for its symbol and decimals
+  const otherTokens = [...new Set(tokenMovements.filter((m) => !m.asset).map((m) => m.token))];
+  const tokens = Object.fromEntries(
+    await Promise.all(
+      otherTokens.slice(0, 8).map(async (id) => [id, await getTokenInfo(id)] as const),
+    ),
+  );
   const memo = memoDisplay(tx.memo_type, tx.memo);
   const feeBump = record["fee_bump_transaction"] as
     | { hash: string }
@@ -277,6 +294,9 @@ export default async function TransactionPage({
               <Amount amount={stroopsToLumens(tx.fee_charged)} />
               <span className="text-xs text-dim">
                 max {stroopsToLumens(tx.max_fee)} XLM offered
+                {feeEvents && feeEvents.refunded !== "0" && (
+                  <> · {stroopsToLumens(feeEvents.refunded)} XLM refunded</>
+                )}
               </span>
             </span>
           </DetailRow>
@@ -332,60 +352,50 @@ export default async function TransactionPage({
 
       {/* Operations - the reading layer */}
       <section id="operations" className="flex scroll-mt-24 flex-col gap-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">
             {ops.length} operation{ops.length === 1 ? "" : "s"}
           </h2>
-          {ops.length > 3 && (
-            <nav
-              className="flex max-w-full flex-wrap gap-1"
-              aria-label="Jump to operation"
-            >
-              {ops.map((_, i) => (
-                <a
-                  key={i}
-                  href={`#op-${i + 1}`}
-                  className="rounded-md border border-border px-2 py-0.5 font-mono text-xs text-dim transition-colors duration-150 hover:text-foreground"
-                >
-                  {i + 1}
-                </a>
-              ))}
-            </nav>
-          )}
+          {ops.length > 3 && <OpJump count={ops.length} />}
         </div>
         {ops.length === 0 ? (
           <Card className="p-0">
             <EmptyState message="Horizon returned no operations for this transaction." />
           </Card>
         ) : (
-          ops.map((op, i) => {
-            const invocation = parseSorobanInvocation(tx.envelope_xdr, i);
-            return (
-              <OpCard
-                key={op.id}
-                index={i}
-                record={op}
-                invocation={invocation}
-                argNames={argNamesFor(invocation)}
-                returnValue={
-                  (op.type as string) === "invoke_host_function"
-                    ? returnValue
-                    : null
-                }
-              />
-            );
-          })
+          <PagedList anchorPrefix="op-" topId="operations" className="flex flex-col gap-3">
+            {ops.map((op, i) => {
+              const invocation = parseSorobanInvocation(tx.envelope_xdr, i);
+              return (
+                <OpCard
+                  key={op.id}
+                  index={i}
+                  record={op}
+                  invocation={invocation}
+                  argNames={argNamesFor(invocation)}
+                  returnValue={
+                    (op.type as string) === "invoke_host_function"
+                      ? returnValue
+                      : null
+                  }
+                />
+              );
+            })}
+          </PagedList>
         )}
       </section>
 
       {/* Contract events */}
-      {events.length > 0 && <ContractEvents events={events} />}
+      {events.length > 0 && (
+        <ContractEvents events={events} passphrase={network.passphrase} tokens={tokens} />
+      )}
         </TabsContent>
 
         <TabsContent value="balances">
           <BalanceChanges
             effects={effects}
             sorobanMovements={tokenMovements}
+            tokens={tokens}
             feeCharged={String(tx.fee_charged)}
             feeAccount={feeAccount}
             successful={tx.successful}

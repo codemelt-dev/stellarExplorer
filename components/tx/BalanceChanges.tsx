@@ -2,11 +2,13 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Address } from "@/components/stellar/Address";
 import { Amount } from "@/components/stellar/Amount";
+import { TokenAmount } from "@/components/stellar/TokenAmount";
+import { PagedList } from "@/components/layout/PagedList";
 import { EmptyState } from "@/components/states/EmptyState";
 import { stroopsToLumens } from "@/lib/stellar/amount";
 import type { EffectRecord } from "@/lib/stellar/transactions";
+import type { TokenInfo } from "@/lib/stellar/contractDecode";
 import type { TokenMovement } from "@/lib/stellar/xdrDecode";
-import { truncateKey } from "@/lib/stellar/strkey";
 import { cn } from "@/lib/utils";
 
 type AnyEffect = EffectRecord & Record<string, unknown>;
@@ -18,6 +20,8 @@ interface ChangeRow {
   amount: string | null;
   assetCode: string;
   assetIssuer?: string;
+  /** Contract token movement: base units, scaled only when the asset is known. */
+  token?: Pick<TokenMovement, "amount" | "token" | "asset">;
 }
 
 function str(e: AnyEffect, k: string): string {
@@ -142,20 +146,24 @@ function movementRows(movements: TokenMovement[]): ChangeRow[] {
     account: m.account,
     direction: m.direction,
     label: MOVEMENT_LABEL[m.kind][m.direction],
-    amount: stroopsToLumens(m.amount),
-    assetCode: truncateKey(m.token, 4),
+    amount: null,
+    assetCode: "",
+    token: { amount: m.amount, token: m.token, asset: m.asset },
   }));
 }
 
 export function BalanceChanges({
   effects,
   sorobanMovements = [],
+  tokens = {},
   feeCharged,
   feeAccount,
   successful,
 }: {
   effects: EffectRecord[];
   sorobanMovements?: TokenMovement[];
+  /** Self-reported symbol and decimals of the tokens involved, by contract id. */
+  tokens?: Record<string, TokenInfo | null>;
   feeCharged: string;
   feeAccount: string;
   successful: boolean;
@@ -180,43 +188,57 @@ export function BalanceChanges({
             <span>Effect</span>
             <span className="text-right">Change</span>
           </div>
-          {rows.map((row, i) => (
-            <div
-              key={i}
-              className="grid h-[44px] grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)] items-center gap-x-4 border-b border-border last:border-b-0"
-            >
-              <span className="min-w-0 truncate">
-                <Address address={row.account} chars={6} />
-              </span>
-              <Badge variant="outline" className="w-fit font-mono text-[11px] text-dim">
-                {row.label}
-              </Badge>
-              <span
-                className={cn(
-                  "text-right font-mono text-sm",
-                  row.direction === "in" && "text-ok",
-                  row.direction === "out" && "text-fail",
-                )}
+          <PagedList className="flex flex-col">
+            {rows.map((row, i) => (
+              <div
+                key={i}
+                className="grid h-[44px] grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)] items-center gap-x-4 border-b border-border last:border-b-0"
               >
-                {row.amount ? (
-                  <>
-                    {row.direction === "in" ? "+" : row.direction === "out" ? "-" : ""}
-                    <Amount
-                      amount={row.amount}
-                      assetCode={row.assetCode}
-                      assetIssuer={row.assetIssuer}
-                      className={cn(
-                        row.direction === "in" && "text-ok",
-                        row.direction === "out" && "text-fail",
-                      )}
-                    />
-                  </>
-                ) : (
-                  <span className="text-dim">–</span>
-                )}
-              </span>
-            </div>
-          ))}
+                <span className="min-w-0 truncate">
+                  <Address address={row.account} chars={6} />
+                </span>
+                <Badge variant="outline" className="w-fit font-mono text-[11px] text-dim">
+                  {row.label}
+                </Badge>
+                <span
+                  className={cn(
+                    "text-right font-mono text-sm",
+                    row.direction === "in" && "text-ok",
+                    row.direction === "out" && "text-fail",
+                  )}
+                >
+                  {row.token ? (
+                    <>
+                      {row.direction === "in" ? "+" : "-"}
+                      <TokenAmount
+                        {...row.token}
+                        info={tokens[row.token.token]}
+                        className={cn(
+                          row.direction === "in" && "text-ok",
+                          row.direction === "out" && "text-fail",
+                        )}
+                      />
+                    </>
+                  ) : row.amount ? (
+                    <>
+                      {row.direction === "in" ? "+" : row.direction === "out" ? "-" : ""}
+                      <Amount
+                        amount={row.amount}
+                        assetCode={row.assetCode}
+                        assetIssuer={row.assetIssuer}
+                        className={cn(
+                          row.direction === "in" && "text-ok",
+                          row.direction === "out" && "text-fail",
+                        )}
+                      />
+                    </>
+                  ) : (
+                    <span className="text-dim">–</span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </PagedList>
         </div>
       )}
 

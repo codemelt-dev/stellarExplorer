@@ -22,13 +22,16 @@ export const CONTRACT_TYPES = new Set([
   "restore_footprint",
 ]);
 
+/** The op types behind a tab, undefined for "all". */
+export function filterTypes(filter: HistoryFilter): ReadonlySet<string> | undefined {
+  if (filter === "all") return undefined;
+  return filter === "payments"
+    ? PAYMENT_TYPES
+    : filter === "trades"
+      ? TRADE_TYPES
+      : CONTRACT_TYPES;
+}
+
 export function matchesFilter(type: string, filter: HistoryFilter): boolean {
-  if (filter === "all") return true;
-  const set =
-    filter === "payments"
-      ? PAYMENT_TYPES
-      : filter === "trades"
-        ? TRADE_TYPES
-        : CONTRACT_TYPES;
-  return set.has(type);
+  return filterTypes(filter)?.has(type) ?? true;
 }

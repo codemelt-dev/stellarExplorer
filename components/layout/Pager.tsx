@@ -8,11 +8,16 @@ export function Pager({
   olderCursor,
   isFirstPage,
   query = {},
+  firstLabel = "Latest",
+  nextLabel = "Older",
 }: {
   basePath: string;
   olderCursor: string | null;
   isFirstPage: boolean;
   query?: Record<string, string>;
+  /** Lists that aren't newest-first name their own ends, e.g. "Top" / "Next". */
+  firstLabel?: string;
+  nextLabel?: string;
 }) {
   const href = (extra: Record<string, string>) => {
     const qs = new URLSearchParams({ ...query, ...extra }).toString();
@@ -25,12 +30,12 @@ export function Pager({
       {!isFirstPage && (
         <Link href={href({})} className={btn}>
           <ChevronsLeft className="size-3.5" aria-hidden="true" />
-          Latest
+          {firstLabel}
         </Link>
       )}
       {olderCursor && (
         <Link href={href({ cursor: olderCursor })} className={btn}>
-          Older
+          {nextLabel}
           <ChevronRight className="size-3.5" aria-hidden="true" />
         </Link>
       )}

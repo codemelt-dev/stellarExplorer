@@ -31,7 +31,7 @@ export function OpCard({
     <Card
       id={`op-${index + 1}`}
       className={cn(
-        "scroll-mt-20 gap-3 p-5",
+        "scroll-mt-20 gap-3 p-5 target:ring-gold/70",
         isSoroban && "border-l-2 border-l-contract",
       )}
     >

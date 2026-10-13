@@ -1,5 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { roundAmount } from "./amount";
+import { roundAmount, stroopsToLumens, unitsToDecimal } from "./amount";
+
+describe("unitsToDecimal", () => {
+  it("scales by the token's decimals", () => {
+    expect(unitsToDecimal("19965856552273268787", 18)).toBe("19.965856552273268787");
+    expect(unitsToDecimal("205000000", 7)).toBe("20.5");
+    expect(unitsToDecimal("1500", 3)).toBe("1.5");
+    expect(unitsToDecimal("42", 0)).toBe("42");
+  });
+
+  it("pads small amounts and keeps the sign", () => {
+    expect(unitsToDecimal("5", 7)).toBe("0.0000005");
+    expect(unitsToDecimal("-11069", 7)).toBe("-0.0011069");
+    expect(unitsToDecimal("0", 18)).toBe("0");
+  });
+
+  it("stroops are 7 decimals", () => {
+    expect(stroopsToLumens("15000000")).toBe("1.5");
+    expect(stroopsToLumens(100n)).toBe("0.00001");
+  });
+});
 
 describe("roundAmount", () => {
   it("rounds half-up to the given decimals", () => {
