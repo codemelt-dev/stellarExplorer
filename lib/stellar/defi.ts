@@ -104,7 +104,8 @@ interface ExpertAssetRecord {
   price?: number;
   price7d?: Array<[number, number]>;
   volume7d?: number;
-  trustlines?: number[];
+  // was [total, authorized, funded], now an object with those names
+  trustlines?: number[] | { total?: number; authorized?: number; funded?: number };
   rating?: { average?: number };
   tomlInfo?: { orgName?: string; image?: string; code?: string };
 }
@@ -135,7 +136,8 @@ export async function getTopTokens(): Promise<TokenRow[]> {
         spark,
         // stellar.expert amounts come in 1e-7 units
         volume7dUsd: (r.volume7d ?? 0) / 1e7,
-        trustlines: r.trustlines?.[0] ?? 0,
+        trustlines:
+          (Array.isArray(r.trustlines) ? r.trustlines[0] : r.trustlines?.total) ?? 0,
       };
     });
 }
