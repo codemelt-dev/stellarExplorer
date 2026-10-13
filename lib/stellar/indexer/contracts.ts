@@ -92,7 +92,8 @@ interface ApiEntry {
   expired: boolean | null;
 }
 
-const STORAGE_PAGE = 50;
+// one request's worth (the API caps at 200); the page splits it up in the browser
+const STORAGE_PAGE = 200;
 
 /**
  * A contract's persistent and temporary entries, in key hash order (the only

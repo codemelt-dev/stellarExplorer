@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { PagedList } from "@/components/layout/PagedList";
 import { Address } from "@/components/stellar/Address";
 import { ScValView } from "@/components/stellar/ScValView";
 import { TokenEventSentence } from "@/components/stellar/TokenEventSentence";
@@ -23,46 +23,50 @@ export function ContractEvents({
   passphrase: string;
 }) {
   return (
-    <section className="flex flex-col gap-3">
+    <section id="events" className="flex scroll-mt-24 flex-col gap-3">
       <h2 className="text-lg font-semibold">
         {events.length} contract event{events.length === 1 ? "" : "s"}
       </h2>
       <Card className="gap-4 p-5">
-        {events.map((event, i) => {
-          const d = describeTokenEvent(event, passphrase);
-          return (
-            <div key={i} className="flex flex-col gap-1.5">
-              {i > 0 && <Separator className="mb-2" />}
-              {d ? (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                  <span className="font-mono text-xs text-dim">#{i}</span>
-                  {event.contractId && <Address address={event.contractId} />}
-                  <TokenEventSentence event={d} info={tokens[d.token]} />
-                </div>
-              ) : (
-                <>
-                  <div className="flex flex-wrap items-center gap-2">
+        <PagedList topId="events" className="flex flex-col">
+          {events.map((event, i) => {
+            const d = describeTokenEvent(event, passphrase);
+            return (
+              <div
+                key={i}
+                className="flex flex-col gap-1.5 border-b border-border py-3 first:pt-0 last:border-b-0 last:pb-0"
+              >
+                {d ? (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                     <span className="font-mono text-xs text-dim">#{i}</span>
                     {event.contractId && <Address address={event.contractId} />}
-                    <span className="flex flex-wrap gap-1">
-                      {event.topics.map((topic, j) => (
-                        <span
-                          key={j}
-                          className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-contract"
-                        >
-                          <ScValView value={topic} />
-                        </span>
-                      ))}
-                    </span>
+                    <TokenEventSentence event={d} info={tokens[d.token]} />
                   </div>
-                  <div className="pl-6">
-                    <ScValView value={event.data} />
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs text-dim">#{i}</span>
+                      {event.contractId && <Address address={event.contractId} />}
+                      <span className="flex flex-wrap gap-1">
+                        {event.topics.map((topic, j) => (
+                          <span
+                            key={j}
+                            className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-contract"
+                          >
+                            <ScValView value={topic} />
+                          </span>
+                        ))}
+                      </span>
+                    </div>
+                    <div className="pl-6">
+                      <ScValView value={event.data} />
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </PagedList>
       </Card>
     </section>
   );

@@ -13,6 +13,7 @@ import { TokenEventSentence } from "@/components/stellar/TokenEventSentence";
 import { Time } from "@/components/stellar/Time";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
+import { PagedList } from "@/components/layout/PagedList";
 import { activeNetwork } from "@/lib/stellar/network";
 import {
   getContractCreation,
@@ -219,13 +220,13 @@ export default async function ContractPage({
         </TabsList>
 
         <TabsContent value="events" className="mt-4">
-          <Card className="gap-4 p-5">
+          <Card id="events" className="scroll-mt-24 gap-4 p-5">
             {events === null ? (
               <EmptyState message="Couldn't load events for this contract. Try again in a moment." />
             ) : events.length === 0 ? (
               <EmptyState message="No recent events. This contract hasn't emitted anything lately." />
             ) : (
-              <div className="flex flex-col">
+              <PagedList topId="events" className="flex flex-col">
                 {events.map((event, i) => {
                   const token = describeTokenEvent(
                     { contractId: id, topics: event.topics, data: event.data },
@@ -273,7 +274,7 @@ export default async function ContractPage({
                     </div>
                   );
                 })}
-              </div>
+              </PagedList>
             )}
           </Card>
         </TabsContent>
@@ -316,9 +317,15 @@ export default async function ContractPage({
 
         <TabsContent value="storage" className="mt-4 flex flex-col gap-4">
           {storage && (
-            <Card className="gap-3 p-5">
+            <Card id="entries" className="scroll-mt-24 gap-3 p-5">
               <p className="text-xs uppercase tracking-wider text-dim">
                 Persistent and temporary entries
+                {(after || storage.next) && (
+                  <span className="normal-case tracking-normal">
+                    {" "}
+                    · {storage.entries.length} at a time
+                  </span>
+                )}
               </p>
               {storage.entries.length === 0 ? (
                 <EmptyState
@@ -329,7 +336,7 @@ export default async function ContractPage({
                   }
                 />
               ) : (
-                <div className="flex flex-col">
+                <PagedList topId="entries" className="flex flex-col">
                   {storage.entries.map((entry) => (
                     <div
                       key={entry.keyHash}
@@ -357,7 +364,7 @@ export default async function ContractPage({
                       </div>
                     </div>
                   ))}
-                </div>
+                </PagedList>
               )}
               {(after || storage.next) && (
                 <nav className="flex items-center justify-end gap-2" aria-label="Storage pages">
@@ -369,7 +376,7 @@ export default async function ContractPage({
                   )}
                   {storage.next && (
                     <Link href={`/contract/${id}?after=${storage.next}`} className={pageLink}>
-                      More
+                      Next batch
                       <ChevronRight className="size-3.5" aria-hidden="true" />
                     </Link>
                   )}
