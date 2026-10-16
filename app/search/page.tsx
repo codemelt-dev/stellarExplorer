@@ -19,7 +19,9 @@ export default async function SearchPage({
   const resolved = resolveQuery(q);
 
   const assets =
-    resolved.type === "asset" ? await searchAssetsByCode(resolved.code) : [];
+    resolved.type === "asset"
+      ? await searchAssetsByCode(resolved.code, resolved.issuer)
+      : [];
 
   return (
     <div className="flex flex-col gap-6">

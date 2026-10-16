@@ -72,7 +72,7 @@ export function routeFor(resolved: ResolvedQuery): string | null {
       return `/search?q=${encodeURIComponent(resolved.address)}`;
     case "asset":
       return resolved.issuer
-        ? `/asset/${resolved.code}-${resolved.issuer}`
+        ? `/search?q=${encodeURIComponent(`${resolved.code}-${resolved.issuer}`)}`
         : `/search?q=${encodeURIComponent(resolved.code)}`;
     case "unknown":
       return null;

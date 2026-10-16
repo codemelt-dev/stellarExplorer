@@ -67,3 +67,25 @@ bun run build   # production build
 - Soroban events are limited to the recent public RPC window
 - Federation resolution and dedicated asset pages are on the roadmap
 - Full history and analytics need the funded indexer
+
+## Browser tests
+
+```bash
+bun install --frozen-lockfile
+bunx playwright install chromium
+bun run test:e2e
+```
+
+Playwright builds and runs the real app on port 3100, using deterministic
+Horizon/RPC fixtures in both the Next.js server and browser. No working RPC,
+wallet, funded account or API key is required. The production build goes into
+`.next-e2e`, separate from local development. Google Fonts are still downloaded
+during the build.
+
+The suite runs in desktop and mobile Chromium. GitHub Actions runs it on pushes
+and pull requests and retains the HTML report, screenshots, videos and traces
+for failures. Once pushed, the **Playwright browser tests** workflow provides the
+CI run to link as deliverable evidence.
+
+See [the coverage and fixture guide](e2e/README.md) for scenarios, debugging and
+the live-provider checks to add when the correct RPC is available.
