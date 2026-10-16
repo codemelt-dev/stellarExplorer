@@ -40,7 +40,12 @@ export default async function SearchPage({
                 className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-2.5 last:border-b-0"
               >
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-sm">{asset.asset_code}</span>
+                  <Link
+                    href={`/asset/${asset.asset_code}-${asset.asset_issuer}`}
+                    className="rounded-sm font-mono text-sm text-gold underline-offset-4 hover:underline"
+                  >
+                    {asset.asset_code}
+                  </Link>
                   <Address address={asset.asset_issuer} chars={6} />
                 </div>
                 <span className="font-mono text-xs text-dim">

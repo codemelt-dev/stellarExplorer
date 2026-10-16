@@ -1,23 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLedgerStream } from "./LedgerStreamProvider";
 import { RollingNumber } from "./RollingNumber";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// the ledger pulse. Bar fills over the avg close time, offset by how far into
-// the current ledger we already are; a new ledger resets it via key={sequence}
+// the ledger pulse. Bar fills from the moment a ledger goes on display until
+// the next one is due; a new ledger resets it via key={sequence}
 export function LedgerPulse() {
-  const { latest, avgCloseMs, status } = useLedgerStream();
-  // Client-only value; rendered after mount so SSR markup stays stable.
-  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
+  const { latest, avgCloseMs, status, tick } = useLedgerStream();
+  // a ledger already on display when this mounts starts part way through,
+  // every later one starts from zero
+  const [mountedAt] = useState(() => Date.now());
 
-  useEffect(() => {
-    if (!latest) return;
-    setElapsedMs(Date.now() - new Date(latest.closedAt).getTime());
-  }, [latest]);
-
-  if (!latest || elapsedMs === null) {
+  if (!latest || !tick) {
     return (
       <div className="flex w-full max-w-xl flex-col items-center gap-3">
         <Skeleton className="h-12 w-56" />
@@ -28,6 +24,9 @@ export function LedgerPulse() {
       </div>
     );
   }
+
+  const durationMs = tick.endsAt - tick.startedAt;
+  const elapsedMs = Math.min(Math.max(mountedAt - tick.startedAt, 0), durationMs);
 
   return (
     <div className="flex w-full max-w-xl flex-col items-center gap-3">
@@ -47,7 +46,7 @@ export function LedgerPulse() {
           key={latest.sequence}
           className="glow-gold h-full w-full origin-left rounded-full bg-gold"
           style={{
-            animation: `ledger-fill ${Math.round(avgCloseMs)}ms linear ${-Math.min(elapsedMs, avgCloseMs)}ms forwards`,
+            animation: `ledger-fill ${Math.round(durationMs)}ms linear ${-Math.round(elapsedMs)}ms forwards`,
           }}
         />
       </div>

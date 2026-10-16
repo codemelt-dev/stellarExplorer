@@ -12,6 +12,7 @@ export function Amount({
   amount,
   assetCode = "XLM",
   assetIssuer,
+  assetHint,
   maxDecimals,
   className,
 }: {
@@ -21,6 +22,8 @@ export function Amount({
   maxDecimals?: number;
   assetCode?: string;
   assetIssuer?: string;
+  /** Hover text on the code, for assets that have no issuer to show. */
+  assetHint?: string;
   className?: string;
 }) {
   const full = formatAmount(amount);
@@ -33,15 +36,17 @@ export function Amount({
   const wasRounded = dust || int !== full.int || frac !== full.frac;
   const exact = wasRounded ? `${full.int}${full.frac ? `.${full.frac}` : ""} ${assetCode}` : undefined;
 
-  const code = assetIssuer ? (
+  const code = assetIssuer || assetHint ? (
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="cursor-help text-dim">{assetCode}</span>
       </TooltipTrigger>
       <TooltipContent>
-        <span className="font-mono text-xs">
-          issued by {truncateKey(assetIssuer)}
-        </span>
+        {assetIssuer ? (
+          <span className="font-mono text-xs">issued by {truncateKey(assetIssuer)}</span>
+        ) : (
+          <span className="text-xs">{assetHint}</span>
+        )}
       </TooltipContent>
     </Tooltip>
   ) : (
