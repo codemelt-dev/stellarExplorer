@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const port = Number(process.env.E2E_PORT ?? 3100);
+const baseURL = `http://127.0.0.1:${port}`;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -12,7 +15,7 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
   globalTeardown: "./e2e/support/global-teardown.ts",
   use: {
-    baseURL: "http://127.0.0.1:3100",
+    baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -24,7 +27,7 @@ export default defineConfig({
   ],
   webServer: {
     command: "node ./e2e/support/start-server.mjs",
-    url: "http://127.0.0.1:3100/search",
+    url: `${baseURL}/search`,
     reuseExistingServer: false,
     timeout: 180_000,
     env: {
@@ -34,6 +37,11 @@ export default defineConfig({
       NEXT_PUBLIC_RPC_URL: "https://rpc.e2e.invalid",
       NEXT_PUBLIC_MAINNET_RPC_URL: "https://rpc.e2e.invalid",
       NEXT_PUBLIC_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015",
+      INDEXER_CLICKHOUSE_URL: "https://clickhouse.indexer.e2e.invalid/query",
+      INDEXER_API_URL: "https://api.indexer.e2e.invalid",
+      INDEXER_USER: "e2e-indexer-user",
+      INDEXER_PASSWORD: "e2e-indexer-password",
+      E2E_PORT: String(port),
     },
   },
 });

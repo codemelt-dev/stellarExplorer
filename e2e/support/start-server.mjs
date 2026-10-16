@@ -9,15 +9,18 @@ writeFileSync(".e2e-cache/network-errors.log", "");
 rmSync(".next-e2e/cache/fetch-cache", { recursive: true, force: true });
 const preload = pathToFileURL(resolve("e2e/support/register-mocks.mjs")).href;
 const next = resolve("node_modules/next/dist/bin/next");
+const fontResponses = resolve("e2e/support/google-font-responses.cjs");
+const port = process.env.E2E_PORT ?? "3100";
 
-async function run(args, building = false) {
+async function run(args) {
   const child = spawn(process.execPath, [next, ...args], {
     stdio: "inherit",
     env: {
       ...process.env,
       // Inherited by Next's build workers too: static pages also use fixtures.
-      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${preload}`,
-      E2E_ALLOW_FONT_DOWNLOADS: building ? "1" : "0",
+      NODE_OPTIONS:
+        `${process.env.NODE_OPTIONS ?? ""} --import=${preload}`.trim(),
+      NEXT_FONT_GOOGLE_MOCKED_RESPONSES: fontResponses,
     },
   });
   const stop = () => child.kill("SIGTERM");
@@ -37,5 +40,6 @@ async function run(args, building = false) {
   }
 }
 
-await run(["build"], true);
-await run(["start", "--hostname", "127.0.0.1", "--port", "3100"]);
+// Webpack supports worktrees whose node_modules is symlinked outside the root.
+await run(["build", "--webpack"]);
+await run(["start", "--hostname", "127.0.0.1", "--port", port]);

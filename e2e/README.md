@@ -2,7 +2,8 @@
 
 These are browser E2E tests of the real Next.js production app against synthetic
 upstream HTTP responses. Pages, React hydration, navigation, SDK parsing and
-XDR decoding run normally. They do not validate the current RPC provider.
+XDR decoding run normally. They do not validate live Horizon, RPC or indexer
+deployments.
 
 ## Run
 
@@ -20,29 +21,36 @@ bun run test:e2e:report
 
 On Linux, use `bunx playwright install --with-deps chromium` for browser system
 dependencies. Playwright starts its own server on `127.0.0.1:3100`; leave that
-port free. It never reuses a running development or live server. Every run builds
-into `.next-e2e` and clears its upstream data cache. No `.env` file is needed:
-the configuration overrides the Horizon/RPC URLs with reserved `.invalid` hosts.
-The build still needs internet access for Google Fonts and dependency/browser
-installation requires network access.
+port free or set `E2E_PORT` to another local port. It never reuses a running
+development or live server. Every run builds into `.next-e2e` and clears its
+upstream data cache. No `.env` file is needed: the configuration overrides
+Horizon, RPC and indexer settings with reserved `.invalid` hosts and synthetic
+credentials. The test build uses Next's Google Fonts mock hook with a
+valid font bundled in Next, so it does not download fonts. It selects Next's
+webpack builder because Turbopack rejects a `node_modules` symlink that points
+outside an isolated Git worktree. Initial dependency and browser installation
+still require network access when they are not already cached. Font substitution
+is limited to the E2E build; this suite makes no pixel or typography assertions.
 
 ## Coverage
 
 Every scenario runs in desktop Chromium and Pixel 7 mobile Chromium emulation.
 
-| Area | Browser assertions |
-| --- | --- |
-| Transaction search | Whitespace trimming, uppercase hash normalization, decoded payment, ledger link |
-| Account search | Exact balances, signers/thresholds, decoded account data, history filters and transaction navigation |
-| Contract search | WASM hash/TTL, events, interface parameter names, storage, event-to-transaction navigation |
-| Ledger search | Transaction list, previous/next ledger, empty ledger, failed transaction link |
-| Asset search | Code normalization, multiple issuers, holder counts, issuer navigation, CODE-ISSUER filtering |
-| Search recovery | Blank input, invalid query escaping, correction after no results |
-| Soroban invocation | Real envelope/result-meta/spec XDR, named argument, return value, events, raw toggle; i128 values above JavaScript's safe integer range |
-| Failure corpus | Underfunded payment and trapped host function reasons, fees on failure, fee-bump envelope/payer/inner transaction, unknown operation fallback/raw JSON, malformed XDR |
-| Muxed accounts | IDs zero and uint64 maximum, base-account resolution, filter links preserving muxed address, invalid checksum |
-| Missing/unavailable data | Missing transaction/account/contract/ledger with search recovery, Horizon 503 alerts, RPC metadata/events outages |
-| Empty/loading states | Account and filtered history, asset results, contract events/storage, SAC interface explanation, transaction operations, delayed transaction skeleton, invalid ledger sequences |
+| Area                     | Browser assertions                                                                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transaction search       | Whitespace trimming, uppercase hash normalization, decoded payment, ledger link                                                                                                 |
+| Account search           | Exact balances, signers/thresholds, decoded account data, history filters and transaction navigation                                                                            |
+| Contract search          | WASM hash/TTL, events, interface parameter names, storage, event-to-transaction navigation                                                                                      |
+| Ledger search            | Transaction list, previous/next ledger, empty ledger, failed transaction link                                                                                                   |
+| Asset search             | Code normalization, multiple issuers, holder counts, search-to-asset navigation, CODE-ISSUER filtering                                                                          |
+| Asset details            | Issued asset supply and holders, issuer navigation, missing assets and invalid identifiers                                                                                      |
+| Search recovery          | Blank input, invalid query escaping, correction after no results                                                                                                                |
+| Soroban invocation       | Real envelope/result-meta/spec XDR, named argument, return value, events, raw toggle; i128 values above JavaScript's safe integer range                                         |
+| Failure corpus           | Underfunded payment and trapped host function reasons, fees on failure, fee-bump envelope/payer/inner transaction, unknown operation fallback/raw JSON, malformed XDR           |
+| Muxed accounts           | IDs zero and uint64 maximum, base-account resolution, filter links preserving muxed address, invalid checksum                                                                   |
+| Missing/unavailable data | Missing transaction/account/contract/ledger with search recovery, Horizon 503 alerts, RPC metadata/events outages                                                               |
+| Empty/loading states     | Account and filtered history, asset results, contract events/storage, SAC interface explanation, transaction operations, delayed transaction skeleton, invalid ledger sequences |
+| Mainnet indexer          | Ledger list/detail, XLM supply and holders, authentication headers, missing-record and outage fallbacks, testnet gating and network switching                                   |
 
 ## Fixture boundaries
 
@@ -64,6 +72,13 @@ Every scenario runs in desktop Chromium and Pixel 7 mobile Chromium emulation.
 - DeFi and market panels receive explicit empty/unavailable fixtures. Wallet
   extensions, aggregator accuracy, screenshots/pixel comparison, Firefox and
   WebKit are outside this suite's scope.
+- Search and explorer scenarios stay on the configured Stellar testnet. Indexer
+  scenarios switch to mainnet explicitly because the indexer fixtures represent
+  mainnet data. Both are synthetic browser coverage; this suite does not validate
+  a live indexer, Horizon or RPC deployment.
+- Indexer coverage uses ClickHouse ledger and asset records plus a PostgREST
+  missing-contract lookup. It does not yet cover indexed contract WASM, events,
+  storage or directory pagination.
 
 When adding a scenario, add a distinct fixture/ID and explicit response branch,
 then assert the user-visible outcome in a spec. Do not stub pages or application
@@ -84,17 +99,13 @@ failures retain screenshots, video and traces. The network audit log is uploaded
 as well. Open Actions → **Playwright browser tests** after pushing these changes
 and link that run for the deliverable. Local runs do not establish a public CI run.
 
-The full application lint currently has unrelated React hook errors in
-`MyActivity`, `NetworkSwitcher`, `ThemeToggle`, `WalletButton`, `LedgerPulse` and
-`Time`, plus an unused-disable warning in `app/opengraph-image.tsx`. This workflow
-lints the new browser suite; it does not disable the existing application rules.
+The workflow lints the browser suite. Existing application lint failures are
+outside this test-only work; the application's lint rules remain enabled.
 
 The regression tests exposed and cover a fixed navigation defect: CODE-ISSUER
 queries previously opened a nonexistent `/asset/...` route. They now use the
 implemented search page with the issuer passed to Horizon's asset filter.
 
-When the correct RPC arrives, retain this deterministic suite and add a separate
-live integration job with known transaction/contract IDs. Verify provider auth,
-network selection, retention windows and actual response shapes there, and do
-the same-transaction comparison against StellarExpert. Dedicated asset detail
-pages and the wider UX issue audit remain separate deliverable work.
+Live provider authentication, retention windows and current upstream response
+shapes require a separate integration check with known records. Those checks are
+outside this deterministic browser suite.
