@@ -1,4 +1,4 @@
-// tiny 7d price sparkline, neutral stroke, no hover
+// tiny 7d sparkline, neutral stroke, no hover
 export function Sparkline({ values }: { values: number[] }) {
   if (values.length < 2) return null;
   const w = 56;

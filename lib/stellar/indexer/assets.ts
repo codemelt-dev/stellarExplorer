@@ -1,5 +1,5 @@
 import "server-only";
-import { chQuery } from "./client";
+import { apiGet, chQuery } from "./client";
 
 // asset tables are rebuilt once a day from current state (about 00:15 UTC)
 
@@ -66,4 +66,95 @@ export async function indexedTopHolders(asset: string, limit: number): Promise<I
     { asset, limit },
   );
   return rows.map((r) => ({ rank: Number(r.rank), holder: r.holder, balance: String(r.balance) }));
+}
+
+export interface IndexedListedAsset {
+  code: string;
+  issuer: string;
+  holders: number;
+  homeDomain: string;
+}
+
+/** Most-held issued assets whose issuer names a home domain (where the toml lives). */
+export async function indexedListedAssets(limit: number): Promise<IndexedListedAsset[]> {
+  const rows = await chQuery<{ code: string; issuer: string; holders: string | number; home_domain: string }>(
+    `SELECT code, issuer, holders, home_domain FROM assets
+     WHERE kind = 'classic' AND home_domain != ''
+     ORDER BY holders DESC LIMIT {limit:UInt32}`,
+    { limit },
+  );
+  return rows.map((r) => ({
+    code: r.code,
+    issuer: r.issuer,
+    holders: Number(r.holders),
+    homeDomain: r.home_domain,
+  }));
+}
+
+export interface IndexedTokenActivity {
+  contractId: string;
+  /** Distinct accounts that sent the token in the last 7 days. */
+  senders: number;
+  transfers: number;
+  /** Distinct senders per day, oldest first, 7 entries. */
+  dailySenders: number[];
+}
+
+const LEDGERS_PER_DAY = 17_280;
+
+/**
+ * Transfer activity over the last 7 days (7 x 17,280 ledgers back from the
+ * tip), by the tokens' contract ids. Classic assets have one too, deployed or
+ * not, and their transfers are recorded under it.
+ */
+export async function indexedTokenActivity(contractIds: string[]): Promise<IndexedTokenActivity[]> {
+  if (!contractIds.length) return [];
+  const rows = await chQuery<{
+    contract_id: string;
+    senders: string | number;
+    transfers: string | number;
+    days: Array<[number | string, number | string]>;
+  }>(
+    `WITH (SELECT max(sequence) FROM ledgers) AS tip
+     SELECT contract_id, uniqExactMerge(s) AS senders, sum(n) AS transfers,
+            groupArray((back, finalizeAggregation(s))) AS days
+     FROM (
+       SELECT contract_id, intDiv(tip - ledger_sequence, {perDay:UInt32}) AS back,
+              count() AS n, uniqExactState(from_address) AS s
+       FROM token_transfers
+       WHERE contract_id IN {ids:Array(String)} AND kind = 'transfer'
+         AND ledger_sequence > tip - 7 * {perDay:UInt32}
+       GROUP BY contract_id, back)
+     GROUP BY contract_id`,
+    { ids: `[${contractIds.map((id) => `'${id}'`).join(",")}]`, perDay: LEDGERS_PER_DAY },
+  );
+  return rows.map((r) => {
+    const daily = new Array<number>(7).fill(0);
+    for (const [back, senders] of r.days) {
+      const b = Number(back);
+      if (b >= 0 && b < 7) daily[6 - b] = Number(senders);
+    }
+    return {
+      contractId: r.contract_id,
+      senders: Number(r.senders),
+      transfers: Number(r.transfers),
+      dailySenders: daily,
+    };
+  });
+}
+
+/**
+ * Mid price of an asset in XLM from the order book's best bid and ask. Null
+ * when a side is empty or the spread is too wide to call it a price.
+ */
+export async function indexedXlmPrice(asset: string): Promise<number | null> {
+  const levels = await apiGet<{ side: "ask" | "bid"; price: string }>("rpc/order_book", {
+    base: asset,
+    counter: "native",
+    depth: "1",
+  });
+  const ask = Number(levels.find((l) => l.side === "ask")?.price);
+  const bid = Number(levels.find((l) => l.side === "bid")?.price);
+  if (!(ask > 0) || !(bid > 0) || ask / bid > 1.2) return null;
+  return (ask + bid) / 2;
 }

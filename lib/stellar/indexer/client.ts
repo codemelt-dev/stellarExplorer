@@ -72,13 +72,16 @@ export async function apiGet<T>(view: string, query: Record<string, string>): Pr
  * Indexer first, the old source (Horizon or RPC) when it is off, fails, or
  * returns null. Null means "not indexed" (nothing before go-live is), so old
  * data still resolves.
+ * `anyNetwork` is for mainnet facts shown on every network (home stats). It
+ * skips the network cookie, so those pages can stay static.
  */
 export async function withIndexer<T>(
   label: string,
   fromIndexer: () => Promise<T | null>,
   fallback: () => Promise<T>,
+  { anyNetwork = false }: { anyNetwork?: boolean } = {},
 ): Promise<T> {
-  if (!(await indexerActive())) return fallback();
+  if (!(anyNetwork ? configured : await indexerActive())) return fallback();
   // dev only: say which source answered, while pages move over one by one
   const trace = process.env.NODE_ENV !== "production";
   const started = Date.now();

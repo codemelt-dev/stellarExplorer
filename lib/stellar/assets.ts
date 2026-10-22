@@ -1,14 +1,20 @@
 import "server-only";
 import { cache } from "react";
-import { Asset, Horizon } from "@stellar/stellar-sdk";
+import { unstable_cache } from "next/cache";
+import { Asset, Horizon, Networks } from "@stellar/stellar-sdk";
 import { horizon } from "./horizon";
+import { getXlmMarket } from "./market";
+import { fetchTomlOrgInfo } from "./toml";
 import { NotFoundError } from "./transactions";
 import { assetKey, fromAssetKey, type AssetIdentity } from "./assetId";
 import { indexerActive, withIndexer } from "./indexer/client";
 import {
   indexedAsset,
   indexedAssets,
+  indexedListedAssets,
+  indexedTokenActivity,
   indexedTopHolders,
+  indexedXlmPrice,
   type IndexedHolder,
 } from "./indexer/assets";
 
@@ -157,3 +163,66 @@ export const getTopHolders = cache(
     }
   },
 );
+
+export interface TopToken {
+  identity: Extract<AssetIdentity, { kind: "issued" }>;
+  org: string;
+  image: string | null;
+  /** From the order book against XLM, times the XLM price. */
+  priceUsd: number | null;
+  /** Distinct senders over the last 7 days. */
+  senders: number;
+  /** The same, per day, oldest first. */
+  dailySenders: number[];
+  holders: number;
+}
+
+const TOKEN_CANDIDATES = 40;
+const TOP_TOKENS = 6;
+
+// throws on indexer errors so unstable_cache keeps only good results
+async function loadTopTokens(): Promise<TopToken[]> {
+  const listed = (await indexedListedAssets(TOKEN_CANDIDATES)).map((a) => ({
+    ...a,
+    contractId: new Asset(a.code, a.issuer).contractId(Networks.PUBLIC),
+  }));
+  const activity = new Map(
+    (await indexedTokenActivity(listed.map((a) => a.contractId))).map((a) => [a.contractId, a]),
+  );
+  // airdropped assets top the holder count, so rank by who actually moves them
+  const ranked = listed
+    .flatMap((a) => {
+      const act = activity.get(a.contractId);
+      return act ? [{ ...a, ...act }] : [];
+    })
+    .sort((a, b) => b.senders - a.senders)
+    .slice(0, TOP_TOKENS);
+
+  const [tomls, xlm, prices] = await Promise.all([
+    Promise.all(ranked.map((a) => fetchTomlOrgInfo(a.homeDomain))),
+    getXlmMarket(),
+    Promise.all(ranked.map((a) => indexedXlmPrice(`${a.code}:${a.issuer}`).catch(() => null))),
+  ]);
+  return ranked.map((a, i) => {
+    const price = prices[i];
+    const toml = tomls[i];
+    // big issuers don't always serve a toml (circle.com doesn't), the home domain stands in
+    return {
+      identity: { kind: "issued", code: a.code, issuer: a.issuer },
+      org: toml?.orgName ?? a.homeDomain,
+      image:
+        toml?.currencies.find((c) => c.code === a.code && c.issuer === a.issuer)?.image ?? null,
+      priceUsd: price !== null && xlm ? price * xlm.priceUsd : null,
+      senders: a.senders,
+      dailySenders: a.dailySenders,
+      holders: a.holders,
+    };
+  });
+}
+
+const cachedTopTokens = unstable_cache(loadTopTokens, ["home-top-tokens"], { revalidate: 900 });
+
+/** Home card, mainnet whatever network is selected. Indexer only, null when it is off or failed. */
+export async function getTopTokens(): Promise<TopToken[] | null> {
+  return withIndexer("top tokens", cachedTopTokens, async () => null, { anyNetwork: true });
+}
