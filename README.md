@@ -1,91 +1,136 @@
-# Astrolabe
+![Astrolabe](.github/astrolabe.png)
 
-A human-first block explorer for the Stellar network.
+The frontend of a Stellar block explorer.
 
-**Decoded by default, raw on demand.** Every transaction, operation and contract call renders as a plain-language sentence, with raw XDR one toggle away for developers.
+Every transaction, operation and contract call reads as a plain sentence, and the raw XDR is one toggle away. Mainnet data comes from our own indexer, [astrolabe-backend](https://github.com/codemelt-dev/astrolabe-backend). Testnet, and anything the indexer can't answer, comes from public Horizon and Stellar RPC.
 
-## What the MVP does today
+Live at https://stellar-explorer-tau.vercel.app
 
-Built self-funded against public endpoints (Horizon, Stellar RPC), running on testnet by default with a network switcher.
-
-- **Home:** live ledger pulse synced to real close times, headline stats (avg close time, TPS, ops), live operations feed with humanized one-liners, DeFi overview, network growth charts
-- **Transactions:** success/failure verdict with decoded error reasons, every operation as a human sentence, Soroban invocations with decoded arguments, return values and contract events, fee-bump support, raw XDR behind a toggle
-- **Accounts:** muxed address resolution, balances, issuer names via SEP-1 stellar.toml, filterable humanized history, signers, thresholds, flags, sponsorship, decoded data entries
-- **Contracts:** WASM hash and TTL, function signatures parsed from the contract spec, recent events, decoded instance storage, Stellar Asset Contract detection
-- **Ledgers:** close metadata, transaction list, prev/next navigation
-- **Search:** G/M/C addresses, transaction hashes, ledger numbers and asset codes, with unit-tested query classification
-- **Wallet:** read-only connect via Stellar Wallets Kit (Freighter, xBull)
-- **DeFi:** chain TVL history, per-protocol dashboards and top tokens, sourced from public aggregators as an interim until our own indexer replaces them
-
-The humanizer covers all 26 classic operation types plus Soroban host functions, with a safe fallback for anything unknown. Amounts stay bigint from wire to render; no floating-point stroop math anywhere.
-
-## Current stack
-
-- Next.js (App Router) + TypeScript, Tailwind CSS v4, shadcn/ui
-- @stellar/stellar-sdk for XDR decoding and RPC access
-- Horizon REST + SSE for classic data and live streaming
-- Stellar RPC for everything Soroban
-- Bun as package manager and runtime, deployed on Vercel
-
-## Where the architecture is going
-
-The MVP is a single Next.js app reading public endpoints. That is the ceiling the grant removes. Post-grant, Astrolabe splits into independent projects, each with its own repo, deploy pipeline and lifecycle:
-
-```
-astrolabe-web        Next.js frontend (this repo, renamed)
-astrolabe-api        NestJS, public REST API and internal aggregates
-astrolabe-indexer    Galexie ledger ingestion and history backfill
+```text
+                                 browser
+                                    │
+  Next.js app (Vercel) ─────────────┼──────────────────────────────────────┐
+  │ app/ pages → lib/stellar/ (one module per domain) → withIndexer        │
+  │ mainnet: indexer first, Horizon or RPC when it is off, fails or misses │
+  │ testnet: Horizon and Stellar RPC                                       │
+  └──────┬─────────────────────┬──────────────────┬──────────────────┬─────┘
+         │                     │                  │                  │
+  Astrolabe indexer         Horizon          Stellar RPC       public sources
+  ClickHouse (SQL)          REST, SSE        Soroban data      DefiLlama, CoinGecko,
+  PostgREST (REST)          live streams     testnet, fallback SEP-1 stellar.toml,
+  mainnet only                                                 AWS ledger archive
 ```
 
-- **Frontend:** stays Next.js. Pages keep the same components; only the data layer swaps from public endpoints to our API.
-- **Backend:** NestJS with TypeScript, sharing @stellar/stellar-sdk decoding with the indexer.
-- **Database:** PostgreSQL as the system of record for entities (accounts, assets, contracts, verification metadata, alert subscriptions), ClickHouse for append-heavy analytics tables.
-- **Data ownership:** ledger data flows from captive-core into our own database. Horizon is an interim bridge only; the funded indexer removes it along with the aggregator dependencies.
+## What it shows
 
-## Running locally
+| Page | Route | What |
+|---|---|---|
+| Home | `/` | live ledger pulse, headline stats, live operations feed, network growth (new accounts and assets per day), DeFi overview with top tokens |
+| Transactions | `/tx/[hash]`, `/transactions` | success or failure with the decoded reason, every operation as a sentence, Soroban arguments, return values and events, balance changes, fee bumps, raw XDR per operation; the list filters by operation type |
+| Accounts | `/account/[id]` | balances, issuer names from stellar.toml, filterable history, signers, thresholds, flags, sponsorship, data entries; muxed (`M…`) addresses resolve to their base account |
+| Contracts | `/contract/[id]`, `/contracts` | WASM hash and TTL, the interface parsed from the contract spec, events, decoded storage, WASM download, Stellar Asset Contract detection; a directory of active and all contracts |
+| Assets | `/asset/[id]`, `/assets` | supply, holders and top holders; a ranked asset directory |
+| Ledgers | `/ledger/[sequence]`, `/ledgers` | close metadata, transactions, previous and next ledger |
+| DeFi | `/defi/[slug]` | per-protocol TVL and volume, recent DEX trades |
+| Search | `/search` | `G`/`M`/`C` addresses, transaction hashes, ledger numbers and asset codes |
+
+The header switches between testnet and mainnet, and connects a wallet read-only (Freighter, xBull). Analytics and liquidity pools are placeholder pages until the indexer's full history lands.
+
+The humanizer covers all 26 classic operation types and Soroban host functions, with a safe fallback for anything unknown. Amounts stay `bigint` from the wire to the screen; no stroop math runs in floating point.
+
+## Where the data comes from
+
+| Data | Mainnet | Testnet |
+|---|---|---|
+| Ledgers, recent transactions | indexer (ClickHouse); Horizon fallback | Horizon |
+| Contracts: summary, storage, interface, events, WASM | indexer (ClickHouse and PostgREST); RPC fallback | Stellar RPC |
+| Contract and asset directories | indexer | not available |
+| Assets: supply, holders, top holders | indexer; Horizon fallback | Horizon |
+| Transaction detail, accounts | Horizon, with RPC and the AWS ledger archive for Soroban results | Horizon and RPC |
+| Live ledger pulse and operations feed | Horizon SSE | Horizon SSE |
+| Network growth, account totals | indexer; stellar.expert fallback | same (always mainnet figures) |
+| Top tokens | indexer: 7-day senders, holders, order book price; XLM price from CoinGecko | same (always mainnet) |
+| TVL, protocols, DEX volume and trades | DefiLlama, Horizon | same (always mainnet) |
+| Issuer names and icons | SEP-1 `stellar.toml` from the issuer's home domain | same |
+
+Every indexer read goes through `withIndexer` in [`lib/stellar/indexer/client.ts`](lib/stellar/indexer/client.ts). When the indexer isn't configured, fails or has no record, the page reads the old source instead and the server logs `[indexer] <what> failed, falling back`. The indexed history starts at the indexer's go-live; backfilling it to genesis is the next milestone.
+
+## Layout
+
+| Folder | What |
+|---|---|
+| [`app/`](app/) | the routes (App Router). Pages stay thin: they load data in server components and hand it to components |
+| [`components/`](components/) | the UI. `stellar/` holds the domain pieces (`Address`, `Amount`, `Time`), `ui/` the shadcn/ui primitives, the rest one folder per area |
+| [`lib/stellar/`](lib/stellar/) | all Stellar data access, one module per domain (`accounts`, `transactions`, `ledgers`, `contracts`, `assets`, ...), plus `humanize.ts` (operation to sentence) and the XDR decoders |
+| [`lib/stellar/indexer/`](lib/stellar/indexer/) | the indexer client: ClickHouse and PostgREST queries and the `withIndexer` fallback |
+| [`e2e/`](e2e/) | Playwright browser tests and their fixtures ([`README.md`](e2e/README.md)) |
+| [`.github/workflows/`](.github/workflows/) | CI: lint, unit tests and browser tests on every push and pull request |
+
+## Design
+
+### Decoded by default, raw on demand
+
+Every value renders for a person first (`sent 120 USDC to GCYV…E3CV`), with the raw XDR or SCVal behind a toggle. A value that can't be decoded shows "Unrecognized value. View raw", never a wall of base64.
+
+### Indexer first, never indexer only
+
+The indexer is the fast path on mainnet, not a single point of failure. Each read names its fallback, so an indexer outage degrades a page to Horizon or RPC speed instead of breaking it. Testnet never touches the indexer.
+
+### Credentials stay on the server
+
+The browser never talks to the indexer. Its URLs and login are read only in server code (`server-only` modules), are never `NEXT_PUBLIC_`, and never reach the client bundle. ClickHouse queries bind every value as a parameter; no SQL is built from user input.
+
+### Every page has three states
+
+Loading skeletons, an empty state that says what to do next, and an error state that says what failed and offers a retry. Mobile down to 375px, visible keyboard focus, and `prefers-reduced-motion` respected.
+
+## Run locally
 
 ```bash
 bun install
 bun dev
 ```
 
-Open http://localhost:3000. Testnet works out of the box with no env vars. Optional overrides:
+Open http://localhost:3000. Testnet works with no settings. For mainnet data, put the indexer settings in `.env.local` (and in the Vercel project for deploys):
+
+| Variable | Default | What |
+|---|---|---|
+| `NEXT_PUBLIC_HORIZON_URL` | `https://horizon-testnet.stellar.org` | testnet Horizon |
+| `NEXT_PUBLIC_RPC_URL` | `https://soroban-testnet.stellar.org` | testnet Stellar RPC |
+| `NEXT_PUBLIC_NETWORK_PASSPHRASE` | testnet | testnet network passphrase |
+| `NEXT_PUBLIC_MAINNET_RPC_URL` | unset | mainnet RPC provider, the Soroban fallback (SDF runs no public one) |
+| `INDEXER_CLICKHOUSE_URL` | unset | the indexer's SQL endpoint, server only |
+| `INDEXER_API_URL` | unset | the indexer's REST API, server only |
+| `INDEXER_USER`, `INDEXER_PASSWORD` | unset | the indexer login, server only |
+
+Without the `INDEXER_*` settings, mainnet reads Horizon and RPC, the directories are unavailable, and the home page's Top tokens card shows its empty state.
 
 ```bash
-NEXT_PUBLIC_HORIZON_URL      # Horizon endpoint, defaults to testnet
-NEXT_PUBLIC_RPC_URL          # Stellar RPC endpoint, defaults to testnet
-NEXT_PUBLIC_MAINNET_RPC_URL  # mainnet RPC provider, unset by default
+bun run build       # production build
+bun run lint
+bun run test:unit   # Vitest: XDR decoding, amounts, asset IDs, search parsing, indexer paging
 ```
-
-```bash
-bun run build   # production build
-```
-
-## Known limitations
-
-- Public endpoint rate limits apply; the MVP is testnet-focused
-- Soroban events are limited to the recent public RPC window
-- Federation resolution and dedicated asset pages are on the roadmap
-- Full history and analytics need the funded indexer
 
 ## Browser tests
 
 ```bash
-bun install --frozen-lockfile
 bunx playwright install chromium
 bun run test:e2e
 ```
 
-Playwright builds and runs the real app on port 3100, using deterministic
-Horizon/RPC fixtures in both the Next.js server and browser. No working RPC,
-wallet, funded account or API key is required. The production build goes into
-`.next-e2e`, separate from local development. Google Fonts are still downloaded
-during the build.
+Playwright builds the production app into `.next-e2e`, starts it on port 3100 and runs every scenario in desktop and mobile Chromium. Horizon, RPC, the indexer and the public sources all answer from deterministic fixtures, so no network, wallet, funded account or key is needed. The build takes a few minutes; GitHub Actions runs the suite on every push and pull request and keeps the HTML report, screenshots, videos and traces of failures for 14 days.
 
-The suite runs in desktop and mobile Chromium. GitHub Actions runs it on pushes
-and pull requests and retains the HTML report, screenshots, videos and traces
-for failures. Once pushed, the **Playwright browser tests** workflow provides the
-CI run to link as deliverable evidence.
+See [the coverage and fixture guide](e2e/README.md) for the scenarios and how to debug them.
 
-See [the coverage and fixture guide](e2e/README.md) for scenarios, debugging and
-the live-provider checks to add when the correct RPC is available.
+## Known limitations
+
+- The indexer covers mainnet only, from its go-live; the full history backfill is next.
+- Transaction detail, account pages and the live feeds still read Horizon.
+- Without a mainnet RPC provider, mainnet Soroban data has no fallback when the indexer misses.
+- Testnet rides public endpoints and their rate limits.
+- Federation addresses (`name*domain`) are recognized in search but not resolved yet.
+
+## Related
+
+- [astrolabe-backend](https://github.com/codemelt-dev/astrolabe-backend): the indexer. Galexie ingestion, PostgreSQL with PostgREST, ClickHouse, and the `lab` setup CLI.
+- [Astrolabe docs](https://codemelt.gitbook.io/astrolabe-docs/): roadmap and milestones.
