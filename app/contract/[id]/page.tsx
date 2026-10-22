@@ -224,7 +224,7 @@ export default async function ContractPage({
             {events === null ? (
               <EmptyState message="Couldn't load events for this contract. Try again in a moment." />
             ) : events.length === 0 ? (
-              <EmptyState message="No recent events. This contract hasn't emitted anything lately." />
+              <EmptyState message="No events from this contract. Many contracts emit none of their own: their activity shows up as calls, and as events of the tokens they move." />
             ) : (
               <PagedList topId="events" className="flex flex-col">
                 {events.map((event, i) => {

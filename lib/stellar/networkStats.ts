@@ -1,7 +1,16 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
+import { withIndexer } from "./indexer/client";
+import {
+  indexedAccountTotals,
+  indexedNewAccounts,
+  indexedNewAssets,
+  type DayCount,
+} from "./indexer/stats";
 
-// mainnet daily network stats from stellar.expert, one big array since 2015.
-// Cached an hour, we only ship the last 90 days to the client
+// mainnet daily network stats, shown whatever network is selected. The indexer
+// first; stellar.expert (one big array since 2015) when it is off or fails.
+// We only ship the last 90 days to the client
 
 interface LedgerStatDay {
   ts: number;
@@ -19,6 +28,7 @@ export interface DailyPoint {
 export interface NetworkGrowthData {
   newAccounts: DailyPoint[];
   newAssets: DailyPoint[];
+  source: "indexer" | "stellar.expert";
 }
 
 export interface AccountTotals {
@@ -43,7 +53,43 @@ async function fetchLedgerStats(): Promise<LedgerStatDay[] | null> {
   }
 }
 
+const DAYS = 90;
+
+const toPoints = (days: DayCount[]): DailyPoint[] =>
+  days.map((d) => ({ date: d.date, volume: d.count }));
+
+// throws on indexer errors so unstable_cache keeps only good results
+const indexedGrowth = unstable_cache(
+  async (): Promise<NetworkGrowthData | null> => {
+    const [accounts, assets] = await Promise.all([
+      indexedNewAccounts(DAYS),
+      indexedNewAssets(DAYS),
+    ]);
+    if (!accounts.length || !assets.length) return null;
+    return { newAccounts: toPoints(accounts), newAssets: toPoints(assets), source: "indexer" };
+  },
+  ["network-growth"],
+  { revalidate: 900 },
+);
+
+const indexedTotals = unstable_cache(
+  async (): Promise<AccountTotals | null> => {
+    const totals = await indexedAccountTotals();
+    return totals && { total: totals.total, newLastDay: totals.newOnDay };
+  },
+  ["account-totals"],
+  { revalidate: 900 },
+);
+
 export async function getAccountTotals(): Promise<AccountTotals | null> {
+  return withIndexer("account totals", indexedTotals, expertAccountTotals, { anyNetwork: true });
+}
+
+export async function getNetworkGrowth(): Promise<NetworkGrowthData | null> {
+  return withIndexer("network growth", indexedGrowth, expertNetworkGrowth, { anyNetwork: true });
+}
+
+async function expertAccountTotals(): Promise<AccountTotals | null> {
   const days = await fetchLedgerStats();
   if (!days || days.length < 2) return null;
   const last = days[days.length - 1];
@@ -54,7 +100,7 @@ export async function getAccountTotals(): Promise<AccountTotals | null> {
   };
 }
 
-export async function getNetworkGrowth(): Promise<NetworkGrowthData | null> {
+async function expertNetworkGrowth(): Promise<NetworkGrowthData | null> {
   try {
     const days = await fetchLedgerStats();
     if (!days || days.length < 2) return null;
@@ -70,7 +116,7 @@ export async function getNetworkGrowth(): Promise<NetworkGrowthData | null> {
       });
       newAssets.push({ date: recent[i].ts, volume: recent[i].new_assets });
     }
-    return { newAccounts, newAssets };
+    return { newAccounts, newAssets, source: "stellar.expert" };
   } catch {
     return null;
   }

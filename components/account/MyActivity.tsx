@@ -108,7 +108,7 @@ export function MyActivity({ accountId }: { accountId: string }) {
 
       {failed ? (
         <p className="py-6 text-center text-sm text-dim">
-          Horizon didn&apos;t respond. Refresh to retry.
+          Couldn&apos;t load your recent activity. Refresh to retry.
         </p>
       ) : !ops ? (
         <div className="flex items-center gap-6">

@@ -9,7 +9,7 @@ export default function AnalyticsPage() {
     <ComingSoon
       icon={ChartLine}
       title="Analytics"
-      description="Long-range network history. Horizon keeps limited history, so these charts come from our own ledger archive."
+      description="Long-range network history from the Astrolabe indexer, once its full history backfill lands."
       planned={[
         "Transactions, operations and fees over time",
         "Active accounts and new account growth",

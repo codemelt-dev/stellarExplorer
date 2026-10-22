@@ -7,8 +7,6 @@ import { PROTOCOLS, protocolLogo } from "./protocols";
 // edge-cached via fetch revalidate so we never hammer the APIs
 
 const LLAMA = "https://api.llama.fi";
-const EXPERT = "https://api.stellar.expert/explorer/public";
-const UA = { "User-Agent": "astrolabe-explorer" };
 
 export { PROTOCOLS };
 
@@ -16,10 +14,9 @@ export { PROTOCOLS };
 async function getJson<T>(
   url: string,
   revalidate: number,
-  headers?: Record<string, string>,
 ): Promise<T | null> {
   try {
-    const res = await fetch(url, { headers, next: { revalidate } });
+    const res = await fetch(url, { next: { revalidate } });
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
@@ -84,62 +81,6 @@ export async function getProtocols(): Promise<ProtocolRow[]> {
   }).filter((r) => r.tvl !== null);
 
   return rows.sort((a, b) => (b.tvl ?? 0) - (a.tvl ?? 0));
-}
-
-export interface TokenRow {
-  code: string;
-  issuer: string;
-  org: string;
-  image: string | null;
-  price: number | null;
-  /** last price vs 7 days ago, in percent */
-  change7d: number | null;
-  spark: number[];
-  volume7dUsd: number;
-  trustlines: number;
-}
-
-interface ExpertAssetRecord {
-  asset: string;
-  price?: number;
-  price7d?: Array<[number, number]>;
-  volume7d?: number;
-  // was [total, authorized, funded], now an object with those names
-  trustlines?: number[] | { total?: number; authorized?: number; funded?: number };
-  rating?: { average?: number };
-  tomlInfo?: { orgName?: string; image?: string; code?: string };
-}
-
-export async function getTopTokens(): Promise<TokenRow[]> {
-  const data = await getJson<{
-    _embedded?: { records?: ExpertAssetRecord[] };
-  }>(`${EXPERT}/asset?sort=volume7d&order=desc&limit=20`, 900, UA);
-
-  const records = data?._embedded?.records ?? [];
-  return records
-    // orgName + decent rating keeps wash-traded junk assets out
-    .filter((r) => r.tomlInfo?.orgName && (r.rating?.average ?? 0) >= 4)
-    .slice(0, 6)
-    .map((r) => {
-      const [code = "?", issuer = ""] = r.asset.split("-");
-      const spark = (r.price7d ?? []).map(([, p]) => p);
-      const first = spark[0];
-      const last = spark[spark.length - 1];
-      return {
-        code,
-        issuer,
-        org: r.tomlInfo?.orgName ?? "",
-        image: r.tomlInfo?.image ?? null,
-        price: r.price ?? null,
-        change7d:
-          first && last ? ((last - first) / first) * 100 : null,
-        spark,
-        // stellar.expert amounts come in 1e-7 units
-        volume7dUsd: (r.volume7d ?? 0) / 1e7,
-        trustlines:
-          (Array.isArray(r.trustlines) ? r.trustlines[0] : r.trustlines?.total) ?? 0,
-      };
-    });
 }
 
 export interface ProtocolDetail {

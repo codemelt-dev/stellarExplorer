@@ -107,7 +107,7 @@ for (const { name, path } of [
   }) => {
     await page.goto(path);
     await expect(page.getByRole("main").getByRole("alert")).toContainText(
-      `Horizon didn't respond while loading this ${name}.`,
+      `The network didn't respond while loading this ${name}.`,
     );
     await expect(page.getByRole("main")).not.toContainText("doesn't exist");
   });
@@ -150,7 +150,7 @@ test("built-in asset contract explains empty events, standard interface and empt
     page.getByRole("heading", { name: "Stellar Asset Contract", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("tabpanel")).toContainText(
-    "No recent events. This contract hasn't emitted anything lately.",
+    "No events from this contract. Many contracts emit none of their own",
   );
   await page.getByRole("tab", { name: "Interface", exact: true }).click();
   await expect(page.getByRole("tabpanel")).toContainText(
@@ -184,7 +184,7 @@ test("transaction with no operations can still show fees and raw data", async ({
   await expect(
     page
       .getByRole("tabpanel", { name: "Overview" })
-      .getByText("Horizon returned no operations for this transaction.", {
+      .getByText("No operations recorded for this transaction.", {
         exact: true,
       }),
   ).toBeVisible();

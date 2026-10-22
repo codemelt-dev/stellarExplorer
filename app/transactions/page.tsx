@@ -67,7 +67,7 @@ export default async function TransactionsPage({
   } catch {
     return (
       <ErrorState
-        message="Horizon didn't respond while loading transactions. Reload the page to retry."
+        message="The network didn't respond while loading transactions. Reload the page to retry."
         className="py-24"
       />
     );

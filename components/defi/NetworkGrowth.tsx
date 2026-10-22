@@ -6,6 +6,7 @@ import { getNetworkGrowth } from "@/lib/stellar/networkStats";
 
 export async function NetworkGrowth() {
   const growth = await getNetworkGrowth();
+  const failed = "Couldn't load growth data. It will be back on the next refresh.";
 
   return (
     <section className="flex flex-col gap-4">
@@ -14,7 +15,11 @@ export async function NetworkGrowth() {
         <Badge variant="outline" className="text-dim">
           mainnet
         </Badge>
-        <span className="ml-auto text-xs text-dim">data: stellar.expert</span>
+        {growth && (
+          <span className="ml-auto text-xs text-dim">
+            data: {growth.source === "indexer" ? "Astrolabe" : "stellar.expert"}
+          </span>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -30,7 +35,7 @@ export async function NetworkGrowth() {
           {growth ? (
             <VolumeChart points={growth.newAccounts} unit="count" />
           ) : (
-            <EmptyState message="Couldn't reach stellar.expert. Growth data will be back on the next refresh." />
+            <EmptyState message={failed} />
           )}
         </Card>
 
@@ -46,7 +51,7 @@ export async function NetworkGrowth() {
           {growth ? (
             <VolumeChart points={growth.newAssets} unit="count" />
           ) : (
-            <EmptyState message="Couldn't reach stellar.expert. Growth data will be back on the next refresh." />
+            <EmptyState message={failed} />
           )}
         </Card>
       </div>

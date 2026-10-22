@@ -80,7 +80,7 @@ export default async function AccountPage({
     }
     return (
       <ErrorState
-        message="Horizon didn't respond while loading this account."
+        message="The network didn't respond while loading this account."
         className="py-24"
       />
     );

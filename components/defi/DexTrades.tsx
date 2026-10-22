@@ -17,7 +17,7 @@ import type { DexTrade } from "@/lib/stellar/defi";
 // latest classic DEX fills, one row per trade
 export function DexTrades({ trades }: { trades: DexTrade[] | null }) {
   if (!trades) {
-    return <EmptyState message="Mainnet Horizon didn't respond, so recent trades are missing. They'll be back on the next refresh." />;
+    return <EmptyState message="Couldn't load recent mainnet trades. They'll be back on the next refresh." />;
   }
   if (trades.length === 0) {
     return <EmptyState message="No trades returned. The DEX is rarely this quiet, try again in a minute." />;

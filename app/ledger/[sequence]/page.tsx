@@ -61,7 +61,7 @@ export default async function LedgerPage({
     }
     return (
       <ErrorState
-        message="Horizon didn't respond while loading this ledger."
+        message="The network didn't respond while loading this ledger."
         className="py-24"
       />
     );
