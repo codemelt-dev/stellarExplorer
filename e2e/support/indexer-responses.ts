@@ -101,6 +101,15 @@ function clickhouseResponse(
       throw new Error("Top-holder request has unexpected parameters");
     }
     rows = indexedXlmHolders;
+  } else if (
+    body.includes("FROM state_copy_runs") ||
+    body.includes("FROM daily_stats") ||
+    body.includes("FROM asset_snapshots") ||
+    (body.includes("FROM assets") && body.includes("home_domain != ''"))
+  ) {
+    // Homepage network stats and top tokens are out of scope: no rows makes
+    // them fall back to the empty stellar.expert fixtures.
+    rows = [];
   } else {
     throw new Error(
       `Unhandled ClickHouse query: ${body.replace(/\s+/g, " ").slice(0, 180)}`,

@@ -150,7 +150,7 @@ test("built-in asset contract explains empty events, standard interface and empt
     page.getByRole("heading", { name: "Stellar Asset Contract", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("tabpanel")).toContainText(
-    "No recent events. This contract hasn't emitted anything lately.",
+    "No events from this contract. Many contracts emit none of their own",
   );
   await page.getByRole("tab", { name: "Interface", exact: true }).click();
   await expect(page.getByRole("tabpanel")).toContainText(
