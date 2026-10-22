@@ -39,7 +39,7 @@ export default async function LedgersPage({
   } catch {
     return (
       <ErrorState
-        message="Horizon didn't respond while loading ledgers. Reload the page to retry."
+        message="The network didn't respond while loading ledgers. Reload the page to retry."
         className="py-24"
       />
     );

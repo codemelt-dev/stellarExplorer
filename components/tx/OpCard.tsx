@@ -95,7 +95,7 @@ export function OpCard({
       <RawPanel
         entries={[
           {
-            label: "Operation record (Horizon JSON)",
+            label: "Operation record (raw JSON)",
             value: JSON.stringify(record, null, 2),
           },
         ]}

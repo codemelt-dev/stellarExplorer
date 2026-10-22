@@ -9,7 +9,7 @@ export default function LiquidityPoolsPage() {
     <ComingSoon
       icon={Droplets}
       title="Liquidity pools"
-      description="Stellar's built-in AMM pools, ranked by what matters. Horizon lists pools but can't sort them by reserves or volume, so ranking lands with our own indexer."
+      description="Stellar's built-in AMM pools, ranked by reserves and volume from the Astrolabe indexer."
       planned={[
         "Pools ranked by total value locked and 24h volume",
         "Reserves, share price and fee earnings per pool",

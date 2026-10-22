@@ -142,7 +142,7 @@ export function LiveOpsFeed() {
 
       {failed ? (
         <p className="py-8 text-center text-sm text-dim">
-          Horizon didn&apos;t respond. Refresh to retry.
+          The live feed didn&apos;t respond. Refresh to retry.
         </p>
       ) : ops.length === 0 ? (
         <div className="flex flex-col gap-2">

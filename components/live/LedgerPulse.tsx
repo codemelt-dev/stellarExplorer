@@ -19,7 +19,7 @@ export function LedgerPulse() {
         <Skeleton className="h-12 w-56" />
         <Skeleton className="h-1 w-full" />
         <span className="text-xs uppercase tracking-wider text-dim">
-          {status === "error" ? "Horizon stream unavailable" : "Connecting to Horizon…"}
+          {status === "error" ? "Live stream unavailable" : "Connecting to the network…"}
         </span>
       </div>
     );

@@ -87,7 +87,7 @@ export default async function TransactionPage({
     }
     return (
       <ErrorState
-        message="Horizon didn't respond while loading this transaction."
+        message="The network didn't respond while loading this transaction."
         className="py-24"
       />
     );
@@ -360,7 +360,7 @@ export default async function TransactionPage({
         </div>
         {ops.length === 0 ? (
           <Card className="p-0">
-            <EmptyState message="Horizon returned no operations for this transaction." />
+            <EmptyState message="No operations recorded for this transaction." />
           </Card>
         ) : (
           <PagedList anchorPrefix="op-" topId="operations" className="flex flex-col gap-3">
