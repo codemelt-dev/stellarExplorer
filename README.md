@@ -36,7 +36,7 @@ One exception to that path: the browser streams the live operations feed (and, o
 | DeFi | `/defi/[slug]` | per-protocol TVL and volume; recent trades on the Stellar DEX page |
 | Search | `/search` | `G`/`M`/`C` addresses, transaction hashes, ledger numbers and asset codes |
 
-The header switches between testnet and mainnet, and connects a wallet read-only (Freighter, xBull). Analytics and liquidity pools are placeholder pages until the indexer's full history lands.
+The site opens on mainnet. The header switches to testnet and back, and connects a wallet read-only (Freighter, xBull). Analytics and liquidity pools are placeholder pages until the indexer's full history lands.
 
 The humanizer covers all 27 operation types (24 classic, plus `invoke_host_function`, `extend_footprint_ttl` and `restore_footprint`), with a safe fallback for anything unknown. Amounts stay `bigint` from the wire to the screen; no stroop math runs in floating point.
 
@@ -97,7 +97,7 @@ bun install
 bun dev
 ```
 
-Open http://localhost:3000. Testnet works with no settings. For mainnet data, put the indexer settings in `.env.local` (and in the Vercel project for deploys):
+Open http://localhost:3000. It opens on mainnet and runs with no settings, on public Horizon. For the indexer, and a Soroban fallback, put these in `.env.local` (and in the Vercel project for deploys):
 
 | Variable | Default | What |
 |---|---|---|

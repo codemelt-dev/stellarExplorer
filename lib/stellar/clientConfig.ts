@@ -6,18 +6,18 @@ export const MAINNET_HORIZON_URL = "https://horizon.stellar.org";
 
 export type ClientNetworkId = "testnet" | "mainnet";
 
-// client-side mirror of the server's network cookie
+// client-side mirror of the server's network cookie; no cookie means mainnet
 export function getClientNetwork(): {
   id: ClientNetworkId;
   horizonUrl: string;
 } {
   if (typeof document !== "undefined") {
     const match = document.cookie.match(/(?:^|;\s*)network=(mainnet|testnet)/);
-    if (match?.[1] === "mainnet") {
-      return { id: "mainnet", horizonUrl: MAINNET_HORIZON_URL };
+    if (match?.[1] === "testnet") {
+      return { id: "testnet", horizonUrl: HORIZON_URL };
     }
   }
-  return { id: "testnet", horizonUrl: HORIZON_URL };
+  return { id: "mainnet", horizonUrl: MAINNET_HORIZON_URL };
 }
 
 export function setClientNetwork(id: ClientNetworkId) {

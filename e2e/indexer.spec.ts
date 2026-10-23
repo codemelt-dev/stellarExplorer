@@ -100,10 +100,28 @@ test("an unindexed mainnet asset falls back to Horizon's missing-record result",
   ).toBeVisible();
 });
 
-test("the indexer stays gated off until the browser switches to mainnet", async ({
+test("a first visit with no network cookie opens on mainnet", async ({
   page,
 }) => {
   await page.context().clearCookies();
+  await page.goto("/asset/XLM");
+
+  await expect(
+    page.getByRole("main").getByText("7,654,321", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Network: Stellar Mainnet/ }),
+  ).toBeVisible();
+});
+
+test("the indexer stays gated off until the browser switches to mainnet", async ({
+  page,
+  baseURL,
+}) => {
+  if (!baseURL) throw new Error("Playwright baseURL is required");
+  await page
+    .context()
+    .addCookies([{ name: "network", value: "testnet", url: baseURL }]);
   await page.goto("/asset/XLM");
   const main = page.getByRole("main");
 
