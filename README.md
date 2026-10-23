@@ -47,7 +47,8 @@ The humanizer covers all 26 classic operation types and Soroban host functions, 
 | Contract and asset directories | indexer | not available |
 | Assets: supply, holders, top holders | indexer; Horizon fallback | Horizon |
 | Transaction detail, accounts | Horizon, with RPC and the AWS ledger archive for Soroban results | Horizon and RPC |
-| Live ledger pulse and operations feed | Horizon SSE | Horizon SSE |
+| Live ledger pulse | indexer, polled every second through `/api/ledgers/live`; Horizon SSE fallback | Horizon SSE |
+| Live operations feed | Horizon SSE | Horizon SSE |
 | Network growth, account totals | indexer; stellar.expert fallback | same (always mainnet figures) |
 | Top tokens | indexer: 7-day senders, holders, order book price; XLM price from CoinGecko | same (always mainnet) |
 | TVL, protocols, DEX volume and trades | DefiLlama, Horizon | same (always mainnet) |
@@ -125,7 +126,7 @@ See [the coverage and fixture guide](e2e/README.md) for the scenarios and how to
 ## Known limitations
 
 - The indexer covers mainnet only, from its go-live; the full history backfill is next.
-- Transaction detail, account pages and the live feeds still read Horizon.
+- Transaction detail, account pages and the live operations feed still read Horizon.
 - Without a mainnet RPC provider, mainnet Soroban data has no fallback when the indexer misses.
 - Testnet rides public endpoints and their rate limits.
 - Federation addresses (`name*domain`) are recognized in search but not resolved yet.

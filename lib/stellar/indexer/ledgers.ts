@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { chQuery } from "./client";
+import { apiGet, chQuery } from "./client";
 import { ledgerCursor } from "./cursor";
 import type { LedgerRow, LedgerTx } from "../ledgers";
 
@@ -84,4 +84,27 @@ export async function indexedLedgerTransactions(sequence: number): Promise<Ledge
     feeStroops: String(t.fee_charged),
     opCount: Number(t.op_count),
   }));
+}
+
+export interface ApiLedger {
+  sequence: number;
+  closed_at: string;
+  tx_count: number;
+  failed_tx_count: number;
+  successful_op_count: number;
+  base_fee: number;
+  protocol_version: number;
+  /** stroops, as a string */
+  fee_pool: string;
+}
+
+// the state API has a ledger about 1s after it closes, ClickHouse 2 ledgers later
+export async function indexedLiveLedgers(after: number | null, limit: number): Promise<ApiLedger[]> {
+  const query: Record<string, string> = {
+    select: "sequence,closed_at,tx_count,failed_tx_count,successful_op_count,base_fee,protocol_version,fee_pool",
+    order: "sequence.desc",
+    limit: String(limit),
+  };
+  if (after !== null) query.sequence = `gt.${after}`;
+  return apiGet<ApiLedger>("ledgers", query);
 }
