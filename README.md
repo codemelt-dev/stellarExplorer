@@ -48,7 +48,9 @@ The humanizer covers all 27 operation types (24 classic, plus `invoke_host_funct
 | Contracts: summary, storage, interface, events, WASM | indexer (ClickHouse and PostgREST); RPC fallback | Stellar RPC |
 | Asset supply and holder count | indexer; Horizon fallback | Horizon |
 | Top holders, asset and contract directories | indexer only | not available |
-| Transaction detail, accounts | Horizon, with RPC and the AWS ledger archive for Soroban results | Horizon and RPC |
+| Accounts: balances, signers, flags, data entries | indexer (PostgREST); Horizon fallback | Horizon |
+| Account history and "Your activity" | indexer (ClickHouse) through `/api/accounts/[id]/activity` for the latter; Horizon for history before 6 October 2026 and as fallback | Horizon |
+| Transaction detail | Horizon, with RPC and the AWS ledger archive for Soroban results | Horizon and RPC |
 | Live ledger pulse | indexer, polled every second through `/api/ledgers/live`; Horizon SSE fallback | Horizon SSE |
 | Live operations feed | Horizon SSE | Horizon SSE |
 | Network growth, account totals | indexer; stellar.expert fallback | same (always mainnet figures) |
@@ -131,7 +133,8 @@ See [the coverage and fixture guide](e2e/README.md) for the scenarios and how to
 ## Known limitations
 
 - The indexer covers mainnet only, from 6 October 2026; the full history backfill is next.
-- Transaction detail, account pages and the live operations feed still read Horizon.
+- Transaction detail and the live operations feed still read Horizon.
+- Indexed account history leaves out the shares a pool deposit received; the indexer keeps the request, not the result.
 - The ledger detail page has no loading skeleton yet.
 - Without a mainnet RPC provider, mainnet Soroban data has no fallback when the indexer misses.
 - Testnet rides public endpoints and their rate limits.

@@ -421,14 +421,16 @@ export function humanizeOperation(record: OperationRecord): Segment[] {
       ];
     }
 
-    case "liquidity_pool_deposit":
+    case "liquidity_pool_deposit": {
+      // the indexer keeps the request, not the shares it got
+      const shares = str(op, "shares_received");
       return [
         addr(source),
         t(" deposited into liquidity pool "),
         code(str(op, "liquidity_pool_id").slice(0, 8) + "…"),
-        t(", received "),
-        code(`${str(op, "shares_received")} shares`),
+        ...(shares ? [t(", received "), code(`${shares} shares`)] : []),
       ];
+    }
 
     case "liquidity_pool_withdraw":
       return [

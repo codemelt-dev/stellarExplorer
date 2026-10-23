@@ -26,7 +26,7 @@ interface ChOp {
 }
 
 // details is a JSON string in ClickHouse
-function parseDetails(details: unknown): unknown {
+export function parseDetails(details: unknown): unknown {
   if (typeof details !== "string") return details;
   try {
     return JSON.parse(details);
@@ -41,7 +41,7 @@ const TX_COLUMNS =
 
 // (ledger, tx) pairs as a SQL tuple list. Built only from integers the indexer
 // returned, checked here, so nothing from the request reaches the query text
-function tupleList(txs: ChTx[]): string {
+export function tupleList(txs: Array<{ ledger_sequence: number; tx_index: number }>): string {
   return txs
     .map((t) => {
       const ledger = Number(t.ledger_sequence);

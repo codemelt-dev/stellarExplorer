@@ -1,10 +1,5 @@
 import { formatAmount, roundAmount } from "@/lib/stellar/amount";
-import { truncateKey } from "@/lib/stellar/strkey";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { AssetCode } from "./AssetCode";
 import { cn } from "@/lib/utils";
 
 // mono amounts with dimmed decimals. Issuer tooltip on non-native assets
@@ -36,28 +31,12 @@ export function Amount({
   const wasRounded = dust || int !== full.int || frac !== full.frac;
   const exact = wasRounded ? `${full.int}${full.frac ? `.${full.frac}` : ""} ${assetCode}` : undefined;
 
-  const code = assetIssuer || assetHint ? (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="cursor-help text-dim">{assetCode}</span>
-      </TooltipTrigger>
-      <TooltipContent>
-        {assetIssuer ? (
-          <span className="font-mono text-xs">issued by {truncateKey(assetIssuer)}</span>
-        ) : (
-          <span className="text-xs">{assetHint}</span>
-        )}
-      </TooltipContent>
-    </Tooltip>
-  ) : (
-    <span className="text-dim">{assetCode}</span>
-  );
-
   return (
     <span className={cn("font-mono text-sm whitespace-nowrap", className)} title={exact}>
       {dust && "<"}
       {int}
-      {frac && <span className="text-dim">.{frac}</span>} {code}
+      {frac && <span className="text-dim">.{frac}</span>}{" "}
+      <AssetCode code={assetCode} issuer={assetIssuer} hint={assetHint} className="text-dim" />
     </span>
   );
 }
