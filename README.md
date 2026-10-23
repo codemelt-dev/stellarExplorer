@@ -21,22 +21,24 @@ Live at https://stellar-explorer-tau.vercel.app
   mainnet only                                                 AWS ledger archive
 ```
 
+One exception to that path: the browser streams the live operations feed (and, on testnet, the ledger pulse) straight from Horizon.
+
 ## What it shows
 
 | Page | Route | What |
 |---|---|---|
-| Home | `/` | live ledger pulse, headline stats, live operations feed, network growth (new accounts and assets per day), DeFi overview with top tokens |
+| Home | `/` | search, live ledger pulse, headline stats with XLM market data, per-ledger activity chart, recent ledgers, live operations feed, DeFi overview with top tokens, network growth (new accounts and assets per day) |
 | Transactions | `/tx/[hash]`, `/transactions` | success or failure with the decoded reason, every operation as a sentence, Soroban arguments, return values and events, balance changes, fee bumps, raw XDR per operation; the list filters by operation type |
 | Accounts | `/account/[id]` | balances, issuer names from stellar.toml, filterable history, signers, thresholds, flags, sponsorship, data entries; muxed (`M…`) addresses resolve to their base account |
 | Contracts | `/contract/[id]`, `/contracts` | WASM hash and TTL, the interface parsed from the contract spec, events, decoded storage, WASM download, Stellar Asset Contract detection; a directory of active and all contracts |
 | Assets | `/asset/[id]`, `/assets` | supply, holders and top holders; a ranked asset directory |
 | Ledgers | `/ledger/[sequence]`, `/ledgers` | close metadata, transactions, previous and next ledger |
-| DeFi | `/defi/[slug]` | per-protocol TVL and volume, recent DEX trades |
+| DeFi | `/defi/[slug]` | per-protocol TVL and volume; recent trades on the Stellar DEX page |
 | Search | `/search` | `G`/`M`/`C` addresses, transaction hashes, ledger numbers and asset codes |
 
 The header switches between testnet and mainnet, and connects a wallet read-only (Freighter, xBull). Analytics and liquidity pools are placeholder pages until the indexer's full history lands.
 
-The humanizer covers all 26 classic operation types and Soroban host functions, with a safe fallback for anything unknown. Amounts stay `bigint` from the wire to the screen; no stroop math runs in floating point.
+The humanizer covers all 27 operation types (24 classic, plus `invoke_host_function`, `extend_footprint_ttl` and `restore_footprint`), with a safe fallback for anything unknown. Amounts stay `bigint` from the wire to the screen; no stroop math runs in floating point.
 
 ## Where the data comes from
 
@@ -44,17 +46,20 @@ The humanizer covers all 26 classic operation types and Soroban host functions, 
 |---|---|---|
 | Ledgers, recent transactions | indexer (ClickHouse); Horizon fallback | Horizon |
 | Contracts: summary, storage, interface, events, WASM | indexer (ClickHouse and PostgREST); RPC fallback | Stellar RPC |
-| Contract and asset directories | indexer | not available |
-| Assets: supply, holders, top holders | indexer; Horizon fallback | Horizon |
+| Asset supply and holder count | indexer; Horizon fallback | Horizon |
+| Top holders, asset and contract directories | indexer only | not available |
 | Transaction detail, accounts | Horizon, with RPC and the AWS ledger archive for Soroban results | Horizon and RPC |
 | Live ledger pulse | indexer, polled every second through `/api/ledgers/live`; Horizon SSE fallback | Horizon SSE |
 | Live operations feed | Horizon SSE | Horizon SSE |
 | Network growth, account totals | indexer; stellar.expert fallback | same (always mainnet figures) |
 | Top tokens | indexer: 7-day senders, holders, order book price; XLM price from CoinGecko | same (always mainnet) |
+| XLM price and market stats | CoinGecko | same |
 | TVL, protocols, DEX volume and trades | DefiLlama, Horizon | same (always mainnet) |
 | Issuer names and icons | SEP-1 `stellar.toml` from the issuer's home domain | same |
 
-Every indexer read goes through `withIndexer` in [`lib/stellar/indexer/client.ts`](lib/stellar/indexer/client.ts). When the indexer isn't configured, fails or has no record, the page reads the old source instead and the server logs `[indexer] <what> failed, falling back`. The indexed history starts at the indexer's go-live; backfilling it to genesis is the next milestone.
+Indexer reads with another source go through `withIndexer` in [`lib/stellar/indexer/client.ts`](lib/stellar/indexer/client.ts). When the indexer isn't configured, fails or has no record, the page reads the old source instead and the server logs `[indexer] <what> failed, falling back`. Reads with no other source (top holders, the directories) show an unavailable state instead.
+
+The indexed history starts at ledger 64,806,592 (6 October 2026), the indexer's go-live. Backfilling it to genesis is the next milestone.
 
 ## Layout
 
@@ -65,7 +70,7 @@ Every indexer read goes through `withIndexer` in [`lib/stellar/indexer/client.ts
 | [`lib/stellar/`](lib/stellar/) | all Stellar data access, one module per domain (`accounts`, `transactions`, `ledgers`, `contracts`, `assets`, ...), plus `humanize.ts` (operation to sentence) and the XDR decoders |
 | [`lib/stellar/indexer/`](lib/stellar/indexer/) | the indexer client: ClickHouse and PostgREST queries and the `withIndexer` fallback |
 | [`e2e/`](e2e/) | Playwright browser tests and their fixtures ([`README.md`](e2e/README.md)) |
-| [`.github/workflows/`](.github/workflows/) | CI: lint, unit tests and browser tests on every push and pull request |
+| [`.github/workflows/`](.github/workflows/) | CI on every push and pull request: test lint, unit tests and browser tests |
 
 ## Design
 
@@ -75,15 +80,15 @@ Every value renders for a person first (`sent 120 USDC to GCYV…E3CV`), with th
 
 ### Indexer first, never indexer only
 
-The indexer is the fast path on mainnet, not a single point of failure. Each read names its fallback, so an indexer outage degrades a page to Horizon or RPC speed instead of breaking it. Testnet never touches the indexer.
+The indexer is the fast path on mainnet, not a single point of failure. Each read that has another source names it as the fallback, so an indexer outage slows a page down to Horizon or RPC speed instead of breaking it. Testnet pages read Horizon and RPC; only the home page's mainnet panels (network growth, top tokens) use the indexer on every network.
 
 ### Credentials stay on the server
 
 The browser never talks to the indexer. Its URLs and login are read only in server code (`server-only` modules), are never `NEXT_PUBLIC_`, and never reach the client bundle. ClickHouse queries bind every value as a parameter; no SQL is built from user input.
 
-### Every page has three states
+### Three states on every data page
 
-Loading skeletons, an empty state that says what to do next, and an error state that says what failed and offers a retry. Mobile down to 375px, visible keyboard focus, and `prefers-reduced-motion` respected.
+A loading skeleton, an empty state that says what to do next, and an error state that says what failed and offers a retry. Mobile down to 375px, visible keyboard focus, and `prefers-reduced-motion` respected.
 
 ## Run locally
 
@@ -104,12 +109,12 @@ Open http://localhost:3000. Testnet works with no settings. For mainnet data, pu
 | `INDEXER_API_URL` | unset | the indexer's REST API, server only |
 | `INDEXER_USER`, `INDEXER_PASSWORD` | unset | the indexer login, server only |
 
-Without the `INDEXER_*` settings, mainnet reads Horizon and RPC, the directories are unavailable, and the home page's Top tokens card shows its empty state.
+Without the `INDEXER_*` settings, mainnet reads Horizon and RPC, the live pulse streams from Horizon, network growth comes from stellar.expert, top holders and the directories are unavailable, and the home page's Top tokens card shows its empty state.
 
 ```bash
 bun run build       # production build
 bun run lint
-bun run test:unit   # Vitest: XDR decoding, amounts, asset IDs, search parsing, indexer paging
+bun run test:unit   # Vitest: XDR and contract decoding, transaction flow, amounts, asset IDs, search parsing, paging
 ```
 
 ## Browser tests
@@ -125,8 +130,9 @@ See [the coverage and fixture guide](e2e/README.md) for the scenarios and how to
 
 ## Known limitations
 
-- The indexer covers mainnet only, from its go-live; the full history backfill is next.
+- The indexer covers mainnet only, from 6 October 2026; the full history backfill is next.
 - Transaction detail, account pages and the live operations feed still read Horizon.
+- The ledger detail page has no loading skeleton yet.
 - Without a mainnet RPC provider, mainnet Soroban data has no fallback when the indexer misses.
 - Testnet rides public endpoints and their rate limits.
 - Federation addresses (`name*domain`) are recognized in search but not resolved yet.
