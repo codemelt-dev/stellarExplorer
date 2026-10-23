@@ -143,6 +143,19 @@ function apiResponse(url: URL, method: string, headers: RequestHeaders) {
     return { status: 200, body: [] } satisfies FixtureResponse;
   }
 
+  if (url.pathname === "/ledgers") {
+    if (
+      url.searchParams.get("select") !==
+        "sequence,closed_at,tx_count,failed_tx_count,successful_op_count,base_fee,protocol_version,fee_pool" ||
+      url.searchParams.get("order") !== "sequence.desc"
+    ) {
+      throw new Error("Live-ledger request has an unexpected projection or order");
+    }
+    // The mainnet live pulse polls this through /api/ledgers/live. No rows keeps
+    // it idle; no scenario asserts the pulse.
+    return { status: 200, body: [] } satisfies FixtureResponse;
+  }
+
   throw new Error(`Unhandled indexer API request: ${method} ${url.href}`);
 }
 

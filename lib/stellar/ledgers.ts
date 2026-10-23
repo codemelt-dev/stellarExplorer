@@ -9,6 +9,8 @@ import {
   indexedLedger,
   indexedLedgers,
   indexedLedgerTransactions,
+  indexedLiveLedgers,
+  type ApiLedger,
 } from "./indexer/ledgers";
 
 /** 404 = missing; 400 = malformed id - both render as "not found" upstream. */
@@ -118,5 +120,18 @@ export async function getRecentLedgers(cursor?: string, limit = 25): Promise<Led
       const page = await call.call();
       return page.records.map(toLedgerRow);
     },
+  );
+}
+
+/**
+ * Mainnet ledgers newer than `after` for the live pulse, newest first. Null when
+ * the indexer is off or failing; the browser then streams from Horizon instead.
+ */
+export async function getLiveLedgers(after: number | null, limit = 60): Promise<ApiLedger[] | null> {
+  return withIndexer(
+    "live ledgers",
+    () => indexedLiveLedgers(after, limit),
+    async () => null,
+    { anyNetwork: true },
   );
 }

@@ -62,6 +62,25 @@ function toLite(record: any): LedgerLite {
   };
 }
 
+// a row from /api/ledgers/live: tx_count includes failed txs, fee pool in stroops
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function fromIndexer(row: any): LedgerLite {
+  return {
+    sequence: row.sequence,
+    closedAt: row.closed_at,
+    txOk: row.tx_count - row.failed_tx_count,
+    txFailed: row.failed_tx_count,
+    opCount: row.successful_op_count,
+    baseFeeStroops: row.base_fee,
+    protocol: row.protocol_version,
+    feePool: Number(row.fee_pool) / 1e7,
+  };
+}
+
+// the indexer has a ledger about 1s after close, so polling at 1s beats
+// Horizon's stream (3 to 6s) on mainnet
+const POLL_MS = 1000;
+
 const WINDOW = 60;
 
 // Horizon hands ledgers over 3 to 6 seconds after they close, at uneven gaps
@@ -110,43 +129,75 @@ export function LedgerStreamProvider({
 
   useEffect(() => {
     let cancelled = false;
-    const { horizonUrl } = getClientNetwork();
+    let source: EventSource | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const { id, horizonUrl } = getClientNetwork();
 
-    // Seed with recent history for instant stats, then stream.
-    fetch(`${horizonUrl}/ledgers?order=desc&limit=${WINDOW}`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (cancelled) return;
-        const records = (json?._embedded?.records ?? []).map(toLite);
-        setLedgers((prev) => mergeLedgers(prev, records));
-        setStatus("live");
-      })
-      .catch(() => {
-        if (!cancelled) setStatus((s) => (s === "live" ? s : "error"));
-      });
-
-    const source = new EventSource(`${horizonUrl}/ledgers?cursor=now`);
-    source.onmessage = (event) => {
-      try {
-        const record = toLite(JSON.parse(event.data));
+    const arrived = (records: LedgerLite[]) => {
+      for (const record of records) {
         lags.current = [
           ...lags.current.slice(1 - LAG_SAMPLES),
           Date.now() - new Date(record.closedAt).getTime(),
         ];
-        setLedgers((prev) => mergeLedgers(prev, [record]));
-        setStatus("live");
-      } catch {
-        // keepalive/hello frames - ignore
       }
     };
-    source.onerror = () => {
-      // EventSource auto-reconnects; only degrade status if we never connected.
-      setStatus((s) => (s === "live" ? s : "error"));
-    };
+
+    function streamFromHorizon() {
+      // Seed with recent history for instant stats, then stream.
+      fetch(`${horizonUrl}/ledgers?order=desc&limit=${WINDOW}`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (cancelled) return;
+          const records = (json?._embedded?.records ?? []).map(toLite);
+          setLedgers((prev) => mergeLedgers(prev, records));
+          setStatus("live");
+        })
+        .catch(() => {
+          if (!cancelled) setStatus((s) => (s === "live" ? s : "error"));
+        });
+
+      source = new EventSource(`${horizonUrl}/ledgers?cursor=now`);
+      source.onmessage = (event) => {
+        try {
+          const record = toLite(JSON.parse(event.data));
+          arrived([record]);
+          setLedgers((prev) => mergeLedgers(prev, [record]));
+          setStatus("live");
+        } catch {
+          // keepalive/hello frames - ignore
+        }
+      };
+      source.onerror = () => {
+        // EventSource auto-reconnects; only degrade status if we never connected.
+        setStatus((s) => (s === "live" ? s : "error"));
+      };
+    }
+
+    // first call seeds the window, later ones ask only for what's newer
+    async function pollIndexer(latest: number) {
+      try {
+        const res = await fetch(`/api/ledgers/live${latest ? `?after=${latest}` : ""}`);
+        if (!res.ok) throw new Error(`live ledgers ${res.status}`);
+        const records = ((await res.json()) as unknown[]).map(fromIndexer);
+        if (cancelled) return;
+        if (latest) arrived(records);
+        setLedgers((prev) => mergeLedgers(prev, records));
+        setStatus("live");
+        const newest = Math.max(latest, ...records.map((r) => r.sequence));
+        timer = setTimeout(() => pollIndexer(newest), POLL_MS);
+      } catch {
+        // indexer off or failing: Horizon for the rest of this visit
+        if (!cancelled) streamFromHorizon();
+      }
+    }
+
+    if (id === "mainnet") pollIndexer(0);
+    else streamFromHorizon();
 
     return () => {
       cancelled = true;
-      source.close();
+      clearTimeout(timer);
+      source?.close();
     };
   }, []);
 
