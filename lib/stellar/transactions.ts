@@ -2,8 +2,30 @@ import "server-only";
 import { cache } from "react";
 import { Horizon, xdr } from "@stellar/stellar-sdk";
 import { horizon } from "./horizon";
+import { activeNetwork } from "./network";
+import { getTransactionMetaXdr } from "./rpc";
+import { getArchivedMetaXdr } from "./archive";
 import { filterTypes, matchesFilter, type HistoryFilter } from "./opFilters";
 import { transactionFlow, type TxFlow } from "./txFlow";
+import {
+  decodeTxError,
+  getFeeEvents,
+  getSorobanEvents,
+  getSorobanReturnValue,
+  memoDisplay,
+  parsePreconditions,
+  parseSorobanInvocation,
+  parseSorobanResources,
+  sorobanTokenMovements,
+  type DecodedContractEvent,
+  type DecodedTxError,
+  type DecodedValue,
+  type FeeEvents,
+  type SorobanInvocation,
+  type SorobanResources,
+  type TokenMovement,
+  type TxPreconditions,
+} from "./xdrDecode";
 import { withIndexer } from "./indexer/client";
 import { indexedRecentTransactions } from "./indexer/transactions";
 
@@ -72,6 +94,128 @@ export const getTransactionOperations = cache(
       throw error;
     }
   },
+);
+
+/** The raw XDR behind a transaction, for the XDR tab. */
+export interface TxRaw {
+  signatures: string[];
+  envelope: string;
+  result: string;
+  /** "" when no source still has it. */
+  meta: string;
+}
+
+/** Everything the transaction page shows, whichever source it came from. */
+export interface TxDetail {
+  hash: string;
+  ledger: number;
+  createdAt: string;
+  successful: boolean;
+  sourceAccount: string;
+  sequence: string;
+  /** Stroops. */
+  feeCharged: string;
+  maxFee: string;
+  feeAccount: string;
+  /** Set on a fee bump: the hash of the transaction it wraps. */
+  innerHash: string | null;
+  memo: { label: string; text: string } | null;
+  error: DecodedTxError | null;
+  ops: OperationRecord[];
+  /** Per operation, null for anything that isn't a contract call, deploy or upload. */
+  invocations: Array<SorobanInvocation | null>;
+  returnValues: Array<DecodedValue | null>;
+  events: DecodedContractEvent[];
+  feeEvents: FeeEvents | null;
+  flow: TxFlow;
+  effects: EffectRecord[];
+  movements: TokenMovement[];
+  // envelope only, null when the source doesn't keep the envelope
+  preconditions: TxPreconditions | null;
+  resources: SorobanResources | null;
+  raw: TxRaw | null;
+}
+
+function isContractCall(op: OperationRecord): boolean {
+  return (op.type as string) === "invoke_host_function";
+}
+
+// Horizon no longer returns result_meta_xdr: Stellar RPC, then the ledger
+// archive. Only worth the round-trip for Soroban txs
+async function resultMeta(
+  tx: TransactionRecord,
+  ops: OperationRecord[],
+): Promise<string | undefined> {
+  const fromHorizon = (tx as TransactionRecord & Record<string, unknown>)["result_meta_xdr"];
+  if (typeof fromHorizon === "string") return fromHorizon;
+  if (!ops.some(isContractCall)) return undefined;
+  return (
+    (await getTransactionMetaXdr(tx.hash)) ??
+    (await getArchivedMetaXdr(tx.ledger_attr, tx.hash)) ??
+    undefined
+  );
+}
+
+/** Horizon records -> the page's view, decoding the envelope and meta. */
+export function fromHorizon(
+  tx: TransactionRecord,
+  ops: OperationRecord[],
+  effects: EffectRecord[],
+  metaXdr: string | undefined,
+  passphrase: string,
+): TxDetail {
+  const record = tx as TransactionRecord & Record<string, unknown>;
+  const feeBump = record["fee_bump_transaction"] as { hash: string } | undefined;
+  const innerTx = record["inner_transaction"] as { hash: string } | undefined;
+  const returnValue = getSorobanReturnValue(metaXdr);
+  const events = getSorobanEvents(metaXdr);
+  return {
+    hash: tx.hash,
+    ledger: tx.ledger_attr,
+    createdAt: tx.created_at,
+    successful: tx.successful,
+    sourceAccount: tx.source_account,
+    sequence: tx.source_account_sequence,
+    feeCharged: String(tx.fee_charged),
+    maxFee: String(tx.max_fee),
+    feeAccount: (record["fee_account"] as string | undefined) ?? tx.source_account,
+    innerHash: feeBump && innerTx ? innerTx.hash : null,
+    memo: memoDisplay(tx.memo_type, tx.memo),
+    error: tx.successful ? null : decodeTxError(tx.result_xdr),
+    ops,
+    invocations: ops.map((op, i) =>
+      isContractCall(op) ? parseSorobanInvocation(tx.envelope_xdr, i) : null,
+    ),
+    returnValues: ops.map((op) => (isContractCall(op) ? returnValue : null)),
+    events,
+    feeEvents: getFeeEvents(metaXdr),
+    flow: envelopeFlow(tx.envelope_xdr, tx.source_account),
+    effects,
+    movements: sorobanTokenMovements(events, passphrase),
+    preconditions: parsePreconditions(tx.envelope_xdr),
+    resources: ops.some(isContractCall) ? parseSorobanResources(tx.envelope_xdr) : null,
+    raw: {
+      signatures: tx.signatures,
+      envelope: tx.envelope_xdr,
+      result: tx.result_xdr,
+      meta: metaXdr ?? "",
+    },
+  };
+}
+
+async function horizonTransactionDetail(hash: string): Promise<TxDetail> {
+  const [tx, ops, effects] = await Promise.all([
+    getTransaction(hash),
+    getTransactionOperations(hash),
+    getTransactionEffects(hash),
+  ]);
+  const meta = await resultMeta(tx, ops);
+  return fromHorizon(tx, ops, effects, meta, (await activeNetwork()).passphrase);
+}
+
+/** The transaction page's data. Throws NotFoundError when there's no such tx. */
+export const getTransactionDetail = cache(
+  (hash: string): Promise<TxDetail> => horizonTransactionDetail(hash),
 );
 
 export interface TxRow {

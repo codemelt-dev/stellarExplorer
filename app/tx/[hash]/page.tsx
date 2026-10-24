@@ -12,7 +12,7 @@ import { PagedList } from "@/components/layout/PagedList";
 import { Address } from "@/components/stellar/Address";
 import { Time } from "@/components/stellar/Time";
 import { Amount } from "@/components/stellar/Amount";
-import { RawPanel } from "@/components/stellar/RawPanel";
+import { TxRawCard } from "@/components/tx/TxRawCard";
 import { ContractEvents } from "@/components/tx/ContractEvents";
 import { CopyButton } from "@/components/stellar/CopyButton";
 import { EmptyState } from "@/components/states/EmptyState";
@@ -20,28 +20,9 @@ import { ErrorState } from "@/components/states/ErrorState";
 import { truncateKey } from "@/lib/stellar/strkey";
 import { stroopsToLumens } from "@/lib/stellar/amount";
 import { activeNetwork } from "@/lib/stellar/network";
-import {
-  envelopeFlow,
-  getTransaction,
-  getTransactionEffects,
-  getTransactionOperations,
-  NotFoundError,
-} from "@/lib/stellar/transactions";
-import {
-  decodeTxError,
-  getFeeEvents,
-  getSorobanEvents,
-  getSorobanReturnValue,
-  memoDisplay,
-  parsePreconditions,
-  parseSorobanInvocation,
-  parseSorobanResources,
-  sorobanTokenMovements,
-} from "@/lib/stellar/xdrDecode";
+import { getTransactionDetail, NotFoundError } from "@/lib/stellar/transactions";
 import { BalanceChanges } from "@/components/tx/BalanceChanges";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getTransactionMetaXdr } from "@/lib/stellar/rpc";
-import { getArchivedMetaXdr } from "@/lib/stellar/archive";
 import { getContractInterface, getTokenInfo } from "@/lib/stellar/contracts";
 import { humanizeOperation, txTypeLabel } from "@/lib/stellar/humanize";
 import { Badge } from "@/components/ui/badge";
@@ -67,14 +48,8 @@ export default async function TransactionPage({
   const netLabel = network.label.toLowerCase();
 
   let tx;
-  let ops;
-  let effects;
   try {
-    [tx, ops, effects] = await Promise.all([
-      getTransaction(hash),
-      getTransactionOperations(hash),
-      getTransactionEffects(hash),
-    ]);
+    tx = await getTransactionDetail(hash);
   } catch (error) {
     if (error instanceof NotFoundError) {
       return (
@@ -93,48 +68,17 @@ export default async function TransactionPage({
     );
   }
 
-  const record = tx as typeof tx & Record<string, unknown>;
-  const error = tx.successful ? null : decodeTxError(tx.result_xdr);
-  // Horizon no longer returns result_meta_xdr - fall back to Stellar RPC, then
-  // to the ledger archive (only worth the round-trip for Soroban txs).
-  const hasSorobanOp = ops.some(
-    (op) => (op.type as string) === "invoke_host_function",
-  );
-  const resultMetaXdr =
-    (record["result_meta_xdr"] as string | undefined) ??
-    (hasSorobanOp
-      ? ((await getTransactionMetaXdr(tx.hash)) ??
-        (await getArchivedMetaXdr(tx.ledger_attr, tx.hash)) ??
-        undefined)
-      : undefined);
-  const returnValue = getSorobanReturnValue(resultMetaXdr);
-  const events = getSorobanEvents(resultMetaXdr);
-  const tokenMovements = sorobanTokenMovements(events, network.passphrase);
-  const feeEvents = getFeeEvents(resultMetaXdr);
+  const { ops, events, error, memo, feeEvents, flow, resources, preconditions } = tx;
   // tokens that aren't Stellar assets: ask each contract for its symbol and decimals
-  const otherTokens = [...new Set(tokenMovements.filter((m) => !m.asset).map((m) => m.token))];
+  const otherTokens = [...new Set(tx.movements.filter((m) => !m.asset).map((m) => m.token))];
   const tokens = Object.fromEntries(
     await Promise.all(
       otherTokens.slice(0, 8).map(async (id) => [id, await getTokenInfo(id)] as const),
     ),
   );
-  const memo = memoDisplay(tx.memo_type, tx.memo);
-  const feeBump = record["fee_bump_transaction"] as
-    | { hash: string }
-    | undefined;
-  const innerTx = record["inner_transaction"] as
-    | { hash: string; max_fee: string }
-    | undefined;
-  const feeAccount = (record["fee_account"] as string | undefined) ?? tx.source_account;
 
   // one-liner under the verdict: what this tx did
-  const invocations = ops
-    .map((op, i) =>
-      (op.type as string) === "invoke_host_function"
-        ? parseSorobanInvocation(tx.envelope_xdr, i)
-        : null,
-    )
-    .filter(Boolean);
+  const invocations = tx.invocations.filter(Boolean);
   const firstInvocation = invocations[0];
   const firstOp = ops[0];
   const moreOps = ops.length - 1;
@@ -161,12 +105,9 @@ export default async function TransactionPage({
   ) : (
     <span className="text-dim">No operations</span>
   );
-  const flow = envelopeFlow(tx.envelope_xdr, tx.source_account);
   const utc = (iso: string) => iso.replace("T", " ").replace(/(\.\d+)?Z$/, " UTC");
 
   const typeChip = txTypeLabel(ops.map((op) => op.type as string));
-  const resources = hasSorobanOp ? parseSorobanResources(tx.envelope_xdr) : null;
-  const preconditions = parsePreconditions(tx.envelope_xdr);
 
   // argument names come from each contract's WASM spec, when it resolves
   const ifaceByContract = new Map<
@@ -233,10 +174,10 @@ export default async function TransactionPage({
           <DetailRow label="Ledger" help="The ledger (Stellar's block) that included this transaction. Ledgers are final the moment they close, there are no confirmations to wait for.">
             <span className="inline-flex flex-wrap items-center gap-2">
               <Link
-                href={`/ledger/${tx.ledger_attr}`}
+                href={`/ledger/${tx.ledger}`}
                 className="rounded-sm font-mono text-gold underline-offset-4 hover:underline"
               >
-                {tx.ledger_attr.toLocaleString("en-US")}
+                {tx.ledger.toLocaleString("en-US")}
               </Link>
               <span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-xs text-dim">
                 <ShieldCheck className="size-3.5 text-ok" aria-hidden="true" />
@@ -247,9 +188,9 @@ export default async function TransactionPage({
           <DetailRow label="Timestamp" help="When the ledger closed. Relative time first, exact UTC time next to it.">
             <span className="inline-flex flex-wrap items-center gap-2">
               <Clock className="size-3.5 text-dim" aria-hidden="true" />
-              <Time iso={tx.created_at} className="text-foreground" />
+              <Time iso={tx.createdAt} className="text-foreground" />
               <span className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-dim">
-                {utc(new Date(tx.created_at).toISOString())}
+                {utc(new Date(tx.createdAt).toISOString())}
               </span>
             </span>
           </DetailRow>
@@ -257,22 +198,22 @@ export default async function TransactionPage({
 
         <DetailGroup>
           <DetailRow label="From" help="The account that signed and submitted this transaction. Its sequence number was used.">
-            <Address address={tx.source_account} chars={40} />
+            <Address address={tx.sourceAccount} chars={40} />
           </DetailRow>
           <DetailRow label="To / interacted with" help="Who or what the main operation targets: the recipient, the contract called, the asset pair traded or the asset trusted.">
             <FlowTarget target={flow.to} moreOps={0} full />
           </DetailRow>
-          {feeBump && innerTx && (
+          {tx.innerHash && (
             <>
               <DetailRow label="Fee paid by" help="Someone else paid the fee for this transaction (a fee bump). Wallets use this to cover their users' fees.">
-                <Address address={feeAccount} chars={40} />
+                <Address address={tx.feeAccount} chars={40} />
               </DetailRow>
               <DetailRow label="Inner transaction" help="The original transaction wrapped by the fee bump.">
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="font-mono" title={innerTx.hash}>
-                    {truncateKey(innerTx.hash, 10)}
+                  <span className="font-mono" title={tx.innerHash}>
+                    {truncateKey(tx.innerHash, 10)}
                   </span>
-                  <CopyButton value={innerTx.hash} label="Copy inner transaction hash" />
+                  <CopyButton value={tx.innerHash} label="Copy inner transaction hash" />
                 </span>
               </DetailRow>
             </>
@@ -291,9 +232,9 @@ export default async function TransactionPage({
           )}
           <DetailRow label="Transaction fee" help="What was actually charged. Senders set a maximum; Stellar only charges what the ledger needed.">
             <span className="inline-flex flex-wrap items-baseline gap-x-3">
-              <Amount amount={stroopsToLumens(tx.fee_charged)} />
+              <Amount amount={stroopsToLumens(tx.feeCharged)} />
               <span className="text-xs text-dim">
-                max {stroopsToLumens(tx.max_fee)} XLM offered
+                max {stroopsToLumens(tx.maxFee)} XLM offered
                 {feeEvents && feeEvents.refunded !== "0" && (
                   <> · {stroopsToLumens(feeEvents.refunded)} XLM refunded</>
                 )}
@@ -330,7 +271,7 @@ export default async function TransactionPage({
             </a>
           </DetailRow>
           <DetailRow label="Sequence number" help="Per-account counter that orders transactions and stops replays.">
-            <span className="font-mono">{tx.source_account_sequence}</span>
+            <span className="font-mono">{tx.sequence}</span>
           </DetailRow>
           {preconditions && (preconditions.minTime || preconditions.maxTime) && (
             <DetailRow label="Valid" help="Time window the sender allowed this transaction to be included in.">
@@ -344,9 +285,11 @@ export default async function TransactionPage({
               </span>
             </DetailRow>
           )}
-          <DetailRow label="Signatures" help="How many keys signed. The raw signatures are on the XDR tab.">
-            {tx.signatures.length}
-          </DetailRow>
+          {tx.raw && (
+            <DetailRow label="Signatures" help="How many keys signed. The raw signatures are on the XDR tab.">
+              {tx.raw.signatures.length}
+            </DetailRow>
+          )}
         </DetailGroup>
       </DetailList>
 
@@ -364,23 +307,16 @@ export default async function TransactionPage({
           </Card>
         ) : (
           <PagedList anchorPrefix="op-" topId="operations" className="flex flex-col gap-3">
-            {ops.map((op, i) => {
-              const invocation = parseSorobanInvocation(tx.envelope_xdr, i);
-              return (
-                <OpCard
-                  key={op.id}
-                  index={i}
-                  record={op}
-                  invocation={invocation}
-                  argNames={argNamesFor(invocation)}
-                  returnValue={
-                    (op.type as string) === "invoke_host_function"
-                      ? returnValue
-                      : null
-                  }
-                />
-              );
-            })}
+            {ops.map((op, i) => (
+              <OpCard
+                key={op.id}
+                index={i}
+                record={op}
+                invocation={tx.invocations[i]}
+                argNames={argNamesFor(tx.invocations[i])}
+                returnValue={tx.returnValues[i]}
+              />
+            ))}
           </PagedList>
         )}
       </section>
@@ -393,40 +329,17 @@ export default async function TransactionPage({
 
         <TabsContent value="balances">
           <BalanceChanges
-            effects={effects}
-            sorobanMovements={tokenMovements}
+            effects={tx.effects}
+            sorobanMovements={tx.movements}
             tokens={tokens}
-            feeCharged={String(tx.fee_charged)}
-            feeAccount={feeAccount}
+            feeCharged={tx.feeCharged}
+            feeAccount={tx.feeAccount}
             successful={tx.successful}
           />
         </TabsContent>
 
         <TabsContent value="raw">
-          <Card className="gap-4 p-5">
-            <h2 className="text-base font-semibold">
-              Signatures ({tx.signatures.length})
-            </h2>
-            <div className="flex flex-col gap-1">
-              {tx.signatures.map((sig, i) => (
-                <span
-                  key={i}
-                  className="font-mono text-xs text-dim break-all"
-                  title={sig}
-                >
-                  {truncateKey(sig, 12)}
-                </span>
-              ))}
-            </div>
-            <RawPanel
-              label="Raw XDR"
-              entries={[
-                { label: "Envelope", value: tx.envelope_xdr },
-                { label: "Result", value: tx.result_xdr },
-                { label: "Result meta", value: resultMetaXdr ?? "" },
-              ]}
-            />
-          </Card>
+          {tx.raw && <TxRawCard raw={tx.raw} />}
         </TabsContent>
       </Tabs>
     </div>
