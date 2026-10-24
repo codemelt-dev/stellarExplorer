@@ -81,13 +81,14 @@ export const getTransactionEffects = cache(
 );
 
 /**
- * The newest mainnet operations for the home page feed. Null when the indexer
- * is off or failing; the browser then streams from Horizon instead.
+ * The newest mainnet operations for the home page feed, 15 of each kind so
+ * every tab has rows. Null when the indexer is off or failing; the browser
+ * then streams from Horizon instead.
  */
-export async function getLiveOperations(limit = 60): Promise<OperationRecord[] | null> {
+export async function getLiveOperations(perKind = 15): Promise<OperationRecord[] | null> {
   return withIndexer(
     "live operations",
-    () => indexedLatestOperations(limit),
+    () => indexedLatestOperations(perKind),
     async () => null,
     { anyNetwork: true },
   );
