@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/accordion";
 import { Card } from "@/components/ui/card";
 import { Address } from "@/components/stellar/Address";
-import type { AccountRecord } from "@/lib/stellar/accounts";
+import type { AccountView } from "@/lib/stellar/accounts";
 
 function decodeDataValue(b64: string): string {
   try {
@@ -19,7 +19,7 @@ function decodeDataValue(b64: string): string {
   }
 }
 
-export function DetailsAccordion({ account }: { account: AccountRecord }) {
+export function DetailsAccordion({ account }: { account: AccountView }) {
   const dataEntries = Object.entries(account.data_attr ?? {});
   const flags = Object.entries(account.flags ?? {})
     .filter(([, v]) => v === true)

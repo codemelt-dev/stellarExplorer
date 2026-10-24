@@ -3,9 +3,7 @@ import { Amount } from "@/components/stellar/Amount";
 import { Identicon } from "@/components/stellar/Identicon";
 import { EmptyState } from "@/components/states/EmptyState";
 import { truncateKey } from "@/lib/stellar/strkey";
-import type { Horizon } from "@stellar/stellar-sdk";
-
-type Balance = Horizon.HorizonApi.BalanceLine;
+import type { BalanceLine as Balance } from "@/lib/stellar/accounts";
 
 // XLM, then trustlines, then pool shares. Issuer identicons stand in for asset icons
 export function BalancesCard({ balances }: { balances: Balance[] }) {

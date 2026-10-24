@@ -50,7 +50,7 @@ Every scenario runs in desktop Chromium and Pixel 7 mobile Chromium emulation.
 | Muxed accounts           | IDs zero and uint64 maximum, base-account resolution, filter links preserving muxed address, invalid checksum                                                                   |
 | Missing/unavailable data | Missing transaction/account/contract/ledger with search recovery, Horizon 503 alerts, RPC metadata/events outages                                                               |
 | Empty/loading states     | Account and filtered history, asset results, contract events/storage, SAC interface explanation, transaction operations, delayed transaction skeleton, invalid ledger sequences |
-| Mainnet indexer          | Ledger list/detail, XLM supply and holders, authentication headers, missing-record and outage fallbacks, testnet gating and network switching                                   |
+| Mainnet indexer          | Ledger list/detail, XLM supply and holders, authentication headers, missing-record and outage fallbacks, mainnet as the default, testnet gating and network switching                                   |
 
 ## Fixture boundaries
 
@@ -72,9 +72,11 @@ Every scenario runs in desktop Chromium and Pixel 7 mobile Chromium emulation.
 - DeFi and market panels receive explicit empty/unavailable fixtures. Wallet
   extensions, aggregator accuracy, screenshots/pixel comparison, Firefox and
   WebKit are outside this suite's scope.
-- Search and explorer scenarios stay on the configured Stellar testnet. Indexer
-  scenarios switch to mainnet explicitly because the indexer fixtures represent
-  mainnet data. Both are synthetic browser coverage; this suite does not validate
+- The app opens on mainnet, but every browser context starts with a `network=testnet`
+  cookie (`storageState` in `playwright.config.ts`), so search and explorer
+  scenarios run on the configured Stellar testnet. Indexer scenarios switch to
+  mainnet explicitly because the indexer fixtures represent mainnet data, and
+  one clears the cookie to check that a first visit lands on mainnet. Both are synthetic browser coverage; this suite does not validate
   a live indexer, Horizon or RPC deployment.
 - Indexer coverage uses ClickHouse ledger and asset records plus a PostgREST
   missing-contract lookup. It does not yet cover indexed contract WASM, events,

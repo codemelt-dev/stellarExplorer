@@ -12,7 +12,7 @@ import {
 } from "../contractDecode";
 import type {
   ContractCreation,
-  ContractEventItem,
+  ContractEventsPage,
   ContractStorageEntry,
   ContractStoragePage,
 } from "../contracts";
@@ -130,6 +130,9 @@ export async function indexedContractStorage(
 
 interface ChEvent {
   ledger_sequence: number;
+  tx_index: number;
+  op_index: number;
+  event_index: number;
   closed_ts: number;
   topics: unknown;
   data: unknown;
@@ -145,30 +148,61 @@ function parse(json: unknown): unknown {
   }
 }
 
-/** Newest 100 events a contract emitted. Fee events (op_index -1) are left out. */
-export async function indexedContractEvents(contractId: string): Promise<ContractEventItem[]> {
+// one batch; a query reads whole granules, so 10 rows cost the same as 100
+const EVENTS_PAGE = 100;
+const MAX_UINT32 = 0xffffffff;
+
+// an event's place in the table: "ledger-tx-op-event"
+function eventCursor(e: ChEvent): string {
+  return `${e.ledger_sequence}-${e.tx_index}-${e.op_index}-${e.event_index}`;
+}
+
+function parseEventCursor(cursor: string): { l: number; t: number; o: number; e: number } | null {
+  const m = /^(\d+)-(\d+)-(\d+)-(\d+)$/.exec(cursor);
+  if (!m) return null;
+  const [l, t, o, e] = m.slice(1).map(Number);
+  return [l, t, o, e].every((n) => n <= MAX_UINT32) ? { l, t, o, e } : null;
+}
+
+/**
+ * A contract's events, newest first, 100 at a time; `before` is the cursor of
+ * the last one already shown. The table is sorted by contract, then position,
+ * so every batch is a short range read however far back it is. Fee events
+ * (op_index -1) are left out. Null for a malformed cursor.
+ */
+export async function indexedContractEvents(
+  contractId: string,
+  before?: string,
+): Promise<ContractEventsPage | null> {
+  const at = before ? parseEventCursor(before) : null;
+  if (before && !at) return null;
   const rows = await chQuery<ChEvent>(
     `WITH page AS (
        SELECT ledger_sequence, tx_index, op_index, event_index,
               toUnixTimestamp(closed_at) AS closed_ts, topics, data
        FROM events WHERE contract_id = {contract:String} AND op_index >= 0
-       ORDER BY ledger_sequence DESC, tx_index DESC, op_index DESC, event_index DESC LIMIT 100)
-     SELECT p.ledger_sequence AS ledger_sequence, p.closed_ts AS closed_ts,
+         ${at ? "AND (ledger_sequence, tx_index, op_index, event_index) < ({l:UInt32}, {t:UInt32}, {o:Int32}, {e:UInt32})" : ""}
+       ORDER BY ledger_sequence DESC, tx_index DESC, op_index DESC, event_index DESC LIMIT {limit:UInt32})
+     SELECT p.ledger_sequence AS ledger_sequence, p.tx_index AS tx_index, p.op_index AS op_index,
+            p.event_index AS event_index, p.closed_ts AS closed_ts,
             p.topics AS topics, p.data AS data, lower(hex(t.hash)) AS tx_hash
      FROM page AS p
      LEFT JOIN (SELECT ledger_sequence, tx_index, hash FROM transactions
                 WHERE (ledger_sequence, tx_index) IN (SELECT ledger_sequence, tx_index FROM page)) AS t
             USING (ledger_sequence, tx_index)
      ORDER BY p.ledger_sequence DESC, p.tx_index DESC, p.op_index DESC, p.event_index DESC`,
-    { contract: contractId },
+    { contract: contractId, limit: EVENTS_PAGE, ...at },
   );
-  return rows.map((e) => ({
-    txHash: e.tx_hash,
-    ledger: Number(e.ledger_sequence),
-    createdAt: new Date(Number(e.closed_ts) * 1000).toISOString(),
-    topics: (Array.isArray(e.topics) ? e.topics : []).map((t) => fromScJson(parse(t))),
-    data: fromScJson(parse(e.data)),
-  }));
+  return {
+    events: rows.map((e) => ({
+      txHash: e.tx_hash,
+      ledger: Number(e.ledger_sequence),
+      createdAt: new Date(Number(e.closed_ts) * 1000).toISOString(),
+      topics: (Array.isArray(e.topics) ? e.topics : []).map((t) => fromScJson(parse(t))),
+      data: fromScJson(parse(e.data)),
+    })),
+    next: rows.length === EVENTS_PAGE ? eventCursor(rows[rows.length - 1]) : null,
+  };
 }
 
 export interface IndexedContract {

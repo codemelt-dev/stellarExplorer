@@ -29,8 +29,8 @@ const NETWORKS: Record<NetworkId, NetworkConfig> = {
   },
 };
 
-/** MVP default. The header switcher is stubbed to testnet for the demo. */
-export const DEFAULT_NETWORK: NetworkId = "testnet";
+/** Where a first visit lands, until the header switcher sets the cookie. */
+export const DEFAULT_NETWORK: NetworkId = "mainnet";
 
 export function getNetwork(id: NetworkId = DEFAULT_NETWORK): NetworkConfig {
   return NETWORKS[id];

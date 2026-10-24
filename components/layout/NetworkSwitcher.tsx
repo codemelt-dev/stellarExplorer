@@ -27,7 +27,7 @@ const LABELS: Record<ClientNetworkId, string> = {
 export function NetworkSwitcher() {
   const menu = usePointerMenu();
   const router = useRouter();
-  const [network, setNetwork] = useState<ClientNetworkId>("testnet");
+  const [network, setNetwork] = useState<ClientNetworkId>("mainnet");
 
   useEffect(() => {
     setNetwork(getClientNetwork().id);

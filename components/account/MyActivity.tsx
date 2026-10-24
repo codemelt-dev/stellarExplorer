@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getClientNetwork } from "@/lib/stellar/clientConfig";
 import { CONTRACT_TYPES, PAYMENT_TYPES, TRADE_TYPES } from "@/lib/stellar/opFilters";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +26,8 @@ function categorize(type: string): (typeof CATEGORIES)[number]["id"] {
 }
 
 // personal activity mix, shown only when the connected wallet IS this account.
-// Built from the most recent operations Horizon returns, no indexer
+// Built from its latest 200 operations, which our server reads (the indexer
+// on mainnet) and forwards
 export function MyActivity({ accountId }: { accountId: string }) {
   const [mine, setMine] = useState(false);
   const [ops, setOps] = useState<OpLite[] | null>(null);
@@ -37,13 +37,12 @@ export function MyActivity({ accountId }: { accountId: string }) {
   useEffect(() => {
     if (localStorage.getItem("wallet_address") !== accountId) return;
     setMine(true);
-    const { horizonUrl } = getClientNetwork();
-    fetch(`${horizonUrl}/accounts/${accountId}/operations?order=desc&limit=200&include_failed=true`)
-      .then((res) => res.json())
-      .then((json) => {
-        const records = (json?._embedded?.records ?? []) as OpLite[];
-        setOps(records);
+    fetch(`/api/accounts/${accountId}/activity`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`activity ${res.status}`);
+        return res.json() as Promise<OpLite[]>;
       })
+      .then(setOps)
       .catch(() => setFailed(true));
   }, [accountId]);
 
@@ -186,7 +185,7 @@ export function MyActivity({ accountId }: { accountId: string }) {
               <p className="mt-1 text-[11px] text-dim">
                 Based on your {ops.length === 200 ? "latest 200" : `${ops.length}`}{" "}
                 operations, back to {new Date(oldest).toISOString().slice(0, 10)}.
-                Full lifetime analytics need an indexer, on the roadmap.
+                Lifetime totals come with the indexer&apos;s full history backfill.
               </p>
             )}
           </div>

@@ -26,7 +26,8 @@ const FILTERS: Array<{ id: HistoryFilter; label: string }> = [
   { id: "contracts", label: "Contracts" },
 ];
 
-// streaming ops table. Hover pauses the feed, incoming ops buffer and flush on leave
+// live ops table: the indexer on mainnet, Horizon's stream on testnet or when
+// the indexer fails. Hover pauses the feed
 export function LiveOpsFeed() {
   const [ops, setOps] = useState<OperationRecord[]>([]);
   const [failed, setFailed] = useState(false);
@@ -37,7 +38,10 @@ export function LiveOpsFeed() {
 
   useEffect(() => {
     let cancelled = false;
-    const { horizonUrl } = getClientNetwork();
+    let source: EventSource | null = null;
+    let flusher: ReturnType<typeof setInterval> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const { id, horizonUrl } = getClientNetwork();
 
     const push = (records: OperationRecord[]) => {
       setOps((prev) => {
@@ -47,41 +51,68 @@ export function LiveOpsFeed() {
       });
     };
 
-    fetch(`${horizonUrl}/operations?order=desc&limit=${MAX_ROWS}&include_failed=true`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (cancelled) return;
-        push(json?._embedded?.records ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
+    function streamFromHorizon() {
+      fetch(`${horizonUrl}/operations?order=desc&limit=${MAX_ROWS}&include_failed=true`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (cancelled) return;
+          push(json?._embedded?.records ?? []);
+        })
+        .catch(() => {
+          if (!cancelled) setFailed(true);
+        });
 
-    // buffer the stream and flush every few ledgers, so rows hold still
-    // long enough to read
-    const source = new EventSource(
-      `${horizonUrl}/operations?cursor=now&include_failed=true`,
-    );
-    source.onmessage = (event) => {
-      try {
-        const record = JSON.parse(event.data) as OperationRecord;
-        bufferRef.current = [record, ...bufferRef.current].slice(0, MAX_ROWS);
-      } catch {
-        // keepalive frames
+      // buffer the stream and flush every few ledgers, so rows hold still
+      // long enough to read
+      source = new EventSource(
+        `${horizonUrl}/operations?cursor=now&include_failed=true`,
+      );
+      source.onmessage = (event) => {
+        try {
+          const record = JSON.parse(event.data) as OperationRecord;
+          bufferRef.current = [record, ...bufferRef.current].slice(0, MAX_ROWS);
+        } catch {
+          // keepalive frames
+        }
+      };
+
+      flusher = setInterval(() => {
+        if (pausedRef.current || bufferRef.current.length === 0) return;
+        const buffered = bufferRef.current;
+        bufferRef.current = [];
+        push(buffered);
+      }, LIST_REFRESH_MS);
+    }
+
+    // mainnet: the newest operations from the indexer, through our route,
+    // every few ledgers. While hovered a round is skipped; the next one
+    // brings the newest anyway
+    async function pollIndexer(first: boolean) {
+      if (!first && pausedRef.current) {
+        timer = setTimeout(() => pollIndexer(false), LIST_REFRESH_MS);
+        return;
       }
-    };
+      try {
+        const res = await fetch("/api/operations/live");
+        if (!res.ok) throw new Error(`live operations ${res.status}`);
+        const records = (await res.json()) as OperationRecord[];
+        if (cancelled) return;
+        push(records);
+        timer = setTimeout(() => pollIndexer(false), LIST_REFRESH_MS);
+      } catch {
+        // indexer off or failing: Horizon for the rest of this visit
+        if (!cancelled) streamFromHorizon();
+      }
+    }
 
-    const flusher = setInterval(() => {
-      if (pausedRef.current || bufferRef.current.length === 0) return;
-      const buffered = bufferRef.current;
-      bufferRef.current = [];
-      push(buffered);
-    }, LIST_REFRESH_MS);
+    if (id === "mainnet") pollIndexer(true);
+    else streamFromHorizon();
 
     return () => {
       cancelled = true;
-      source.close();
+      clearTimeout(timer);
       clearInterval(flusher);
+      source?.close();
     };
   }, []);
 

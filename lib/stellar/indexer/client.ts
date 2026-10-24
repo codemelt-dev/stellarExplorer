@@ -82,21 +82,38 @@ export async function withIndexer<T>(
   { anyNetwork = false }: { anyNetwork?: boolean } = {},
 ): Promise<T> {
   if (!(anyNetwork ? configured : await indexerActive())) return fallback();
-  // dev only: say which source answered, while pages move over one by one
-  const trace = process.env.NODE_ENV !== "production";
+  // one line per read in every environment: the server logs then show which
+  // source answered each page, the request accounting reviewers look at
   const started = Date.now();
   try {
     const result = await fromIndexer();
     if (result !== null) {
-      if (trace) console.info(`[indexer] ${label}: served in ${Date.now() - started}ms`);
+      console.info(`[indexer] ${label}: indexer ${Date.now() - started}ms`);
       return result;
     }
-    if (trace) console.info(`[indexer] ${label}: not indexed, falling back`);
+    console.info(`[indexer] ${label}: fallback (not indexed)`);
   } catch (error) {
     console.warn(
-      `[indexer] ${label} failed, falling back:`,
+      `[indexer] ${label}: fallback (failed)`,
       error instanceof Error ? error.message : error,
     );
   }
   return fallback();
+}
+
+/**
+ * For data only the indexer has: null when it is off or fails, logged the
+ * same way as withIndexer.
+ */
+export async function indexerRead<T>(label: string, read: () => Promise<T>): Promise<T | null> {
+  if (!(await indexerActive())) return null;
+  const started = Date.now();
+  try {
+    const result = await read();
+    console.info(`[indexer] ${label}: indexer ${Date.now() - started}ms`);
+    return result;
+  } catch (error) {
+    console.warn(`[indexer] ${label}: failed`, error instanceof Error ? error.message : error);
+    return null;
+  }
 }

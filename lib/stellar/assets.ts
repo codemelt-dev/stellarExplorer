@@ -7,7 +7,7 @@ import { getXlmMarket } from "./market";
 import { fetchTomlOrgInfo } from "./toml";
 import { NotFoundError } from "./transactions";
 import { assetKey, fromAssetKey, type AssetIdentity } from "./assetId";
-import { indexerActive, withIndexer } from "./indexer/client";
+import { indexerActive, indexerRead, withIndexer } from "./indexer/client";
 import {
   indexedAsset,
   indexedAssets,
@@ -151,18 +151,8 @@ export type { IndexedHolder as AssetHolder };
 
 /** Largest holders, indexer only. Null where there is no indexer or it failed. */
 export const getTopHolders = cache(
-  async (identity: AssetIdentity, limit = 100): Promise<IndexedHolder[] | null> => {
-    if (!(await indexerActive())) return null;
-    try {
-      return await indexedTopHolders(assetKey(identity), limit);
-    } catch (error) {
-      console.warn(
-        "[indexer] top holders failed:",
-        error instanceof Error ? error.message : error,
-      );
-      return null;
-    }
-  },
+  (identity: AssetIdentity, limit = 100): Promise<IndexedHolder[] | null> =>
+    indexerRead("top holders", () => indexedTopHolders(assetKey(identity), limit)),
 );
 
 export interface TopToken {
