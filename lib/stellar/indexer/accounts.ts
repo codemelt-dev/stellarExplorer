@@ -107,11 +107,16 @@ interface TxKey {
   tx_index: number;
 }
 
+export const OP_COLUMNS =
+  "toString(id) AS op_id, ledger_sequence, tx_index, op_index, type, type_name, " +
+  "source_account, source_account_muxed, details, successful, toUnixTimestamp(closed_at) AS closed_ts";
+
 // account_activity roles, a bitmask per transaction
 const OP_SOURCE = 4;
 const NAMED = 8;
 
-interface ChAccountOp extends TxKey {
+/** An operations row as OP_COLUMNS selects it. */
+export interface ChOpRow extends TxKey {
   // not "id": ClickHouse would read the alias in WHERE
   op_id: string;
   op_index: number;
@@ -176,7 +181,7 @@ export async function indexedAccountOperations(
   let opBound = cursor ?? (newer ? "0" : MAX_INT64);
   let scannedAll = false;
   let scannedAny = false;
-  const found: ChAccountOp[] = [];
+  const found: ChOpRow[] = [];
 
   for (let round = 0; round < MAX_ROUNDS && found.length < limit && !scannedAll; round++) {
     const txs = await chQuery<TxKey & { roles: number }>(
@@ -215,10 +220,8 @@ export async function indexedAccountOperations(
     ].join(" OR ");
 
     found.push(
-      ...(await chQuery<ChAccountOp>(
-        `SELECT toString(id) AS op_id, ledger_sequence, tx_index, op_index, type, type_name,
-                source_account, source_account_muxed, details, successful,
-                toUnixTimestamp(closed_at) AS closed_ts
+      ...(await chQuery<ChOpRow>(
+        `SELECT ${OP_COLUMNS}
          FROM operations
          WHERE (ledger_sequence, tx_index) IN (${tupleList(txs)})
            AND id ${newer ? ">" : "<"} {after:Int64}
@@ -240,7 +243,7 @@ export async function indexedAccountOperations(
   if (!scannedAny) return null;
 
   const full = found.length === limit;
-  const records = await toRecords(found);
+  const records = await toOpRecords(found);
   return {
     records: newer ? records.reverse() : records,
     cursor: full ? found[found.length - 1].op_id : opBound,
@@ -249,10 +252,10 @@ export async function indexedAccountOperations(
 }
 
 // tx hashes for the rows, and for path payments the transfers that say what moved
-async function toRecords(ops: ChAccountOp[]): Promise<OperationRecord[]> {
+export async function toOpRecords(ops: ChOpRow[]): Promise<OperationRecord[]> {
   if (ops.length === 0) return [];
   const key = (row: TxKey) => `${row.ledger_sequence}:${row.tx_index}`;
-  const unique = (rows: ChAccountOp[]) => [...new Map(rows.map((row) => [key(row), row])).values()];
+  const unique = (rows: ChOpRow[]) => [...new Map(rows.map((row) => [key(row), row])).values()];
   const paths = ops.filter((op) => PATH_PAYMENTS.has(op.type_name));
 
   const [hashes, transfers] = await Promise.all([

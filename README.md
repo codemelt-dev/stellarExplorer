@@ -53,7 +53,7 @@ The humanizer covers all 27 operation types (24 classic, plus `invoke_host_funct
 | Transaction detail: operations, contract calls, return values, events, balance changes | indexer (ClickHouse); Horizon for transactions before 6 October 2026 and as fallback | Horizon, with RPC and the AWS ledger archive for Soroban results |
 | Transaction raw XDR (XDR tab) | Horizon through `/api/tx/[hash]/raw`, only when the tab is opened; RPC or the AWS ledger archive for the meta | Horizon and RPC |
 | Live ledger pulse | indexer, polled every second through `/api/ledgers/live`; Horizon SSE fallback | Horizon SSE |
-| Live operations feed | Horizon SSE | Horizon SSE |
+| Live operations feed | indexer, polled every 20 seconds through `/api/operations/live`; Horizon SSE fallback | Horizon SSE |
 | Network growth, account totals | indexer; stellar.expert fallback | same (always mainnet figures) |
 | Top tokens | indexer: 7-day senders, holders, order book price; XLM price from CoinGecko | same (always mainnet) |
 | XLM price and market stats | CoinGecko | same |
@@ -148,7 +148,6 @@ See [the coverage and fixture guide](e2e/README.md) for the scenarios and how to
 ## Known limitations
 
 - The indexer covers mainnet only, from 6 October 2026; the full history backfill is next.
-- The live operations feed still reads Horizon.
 - Indexer-served transaction pages leave out the signature count, validity window and contract resources: they come from the envelope, which the indexer doesn't store. The XDR tab still has the signatures.
 - Indexed account history and transaction pages leave out the shares a pool deposit received; the indexer keeps the request, not the result.
 - The ledger detail page has no loading skeleton yet.

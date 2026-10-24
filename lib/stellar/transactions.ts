@@ -29,6 +29,7 @@ import {
 import { withIndexer } from "./indexer/client";
 import { indexedRecentTransactions } from "./indexer/transactions";
 import { indexedTransactionDetail } from "./indexer/txDetail";
+import { indexedLatestOperations } from "./indexer/operations";
 
 export type TransactionRecord = Horizon.ServerApi.TransactionRecord;
 export type OperationRecord = Horizon.ServerApi.OperationRecord;
@@ -78,6 +79,19 @@ export const getTransactionEffects = cache(
     }
   },
 );
+
+/**
+ * The newest mainnet operations for the home page feed. Null when the indexer
+ * is off or failing; the browser then streams from Horizon instead.
+ */
+export async function getLiveOperations(limit = 60): Promise<OperationRecord[] | null> {
+  return withIndexer(
+    "live operations",
+    () => indexedLatestOperations(limit),
+    async () => null,
+    { anyNetwork: true },
+  );
+}
 
 /** All operations of a transaction (a tx holds at most 100 ops). */
 export const getTransactionOperations = cache(
