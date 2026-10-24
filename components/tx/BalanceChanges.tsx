@@ -140,12 +140,13 @@ const MOVEMENT_LABEL: Record<
   clawback: { in: "clawed back", out: "clawed back" },
 };
 
-// SAC / token movements decoded from contract events (Horizon effects omit them)
+// token movements: contract events (Horizon effects omit them), or every
+// transfer when the page comes from the indexer
 function movementRows(movements: TokenMovement[]): ChangeRow[] {
   return movements.map((m) => ({
     account: m.account,
     direction: m.direction,
-    label: MOVEMENT_LABEL[m.kind][m.direction],
+    label: m.label ?? MOVEMENT_LABEL[m.kind][m.direction],
     amount: null,
     assetCode: "",
     token: { amount: m.amount, token: m.token, asset: m.asset },
@@ -154,21 +155,34 @@ function movementRows(movements: TokenMovement[]): ChangeRow[] {
 
 export function BalanceChanges({
   effects,
-  sorobanMovements = [],
+  movements = [],
+  notes = [],
   tokens = {},
   feeCharged,
   feeAccount,
   successful,
 }: {
   effects: EffectRecord[];
-  sorobanMovements?: TokenMovement[];
+  movements?: TokenMovement[];
+  /** Changes that move no money, when there are no effects to say so. */
+  notes?: Array<{ account: string; label: string }>;
   /** Self-reported symbol and decimals of the tokens involved, by contract id. */
   tokens?: Record<string, TokenInfo | null>;
   feeCharged: string;
   feeAccount: string;
   successful: boolean;
 }) {
-  const rows = [...toRows(effects), ...movementRows(sorobanMovements)];
+  const rows: ChangeRow[] = [
+    ...toRows(effects),
+    ...movementRows(movements),
+    ...notes.map((n) => ({
+      account: n.account,
+      direction: "neutral" as const,
+      label: n.label,
+      amount: null,
+      assetCode: "",
+    })),
+  ];
 
   return (
     <Card className="gap-3 p-5">

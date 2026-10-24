@@ -74,18 +74,25 @@ function Pages({
  * With `anchorPrefix`, row N carries id `<prefix>N`; all rows stay mounted
  * (hidden ones too) so a link or jump to that id finds it, opens its page and
  * the row still gets :target. Without it only the visible rows render.
+ * With `hasMore`, the rows are a first batch: showing the last page calls
+ * `onLastPage` so the caller can append the next one.
  */
 export function PagedList({
   children,
   anchorPrefix,
   topId,
   className,
+  hasMore = false,
+  onLastPage,
 }: {
   children: ReactNode;
   anchorPrefix?: string;
   /** Scrolled back to when a page is picked from the bottom bar. */
   topId?: string;
   className?: string;
+  /** More rows exist than are loaded. */
+  hasMore?: boolean;
+  onLastPage?: () => void;
 }) {
   const rows = Children.toArray(children);
   const count = rows.length;
@@ -117,6 +124,10 @@ export function PagedList({
     };
   }, [anchorPrefix, count]);
 
+  useEffect(() => {
+    if (hasMore && page === pages) onLastPage?.();
+  }, [hasMore, page, pages, onLastPage]);
+
   const pick = (next: number, fromBottom: boolean) => {
     setView((v) => ({ ...v, page: next }));
     if (fromBottom && topId) document.getElementById(topId)?.scrollIntoView();
@@ -125,7 +136,7 @@ export function PagedList({
   const resize = (size: number) => setView({ size, page: Math.floor(start / size) + 1 });
 
   const paged = count > SIZES[0];
-  const range = `${start + 1}-${end} of ${count}`;
+  const range = `${start + 1}-${end} of ${count}${hasMore ? "+" : ""}`;
 
   return (
     <>
