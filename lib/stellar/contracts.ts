@@ -12,7 +12,7 @@ import {
   type ContractSummary,
   type TokenInfo,
 } from "./contractDecode";
-import { indexerActive, withIndexer } from "./indexer/client";
+import { indexerActive, indexerRead, withIndexer } from "./indexer/client";
 import { fromAssetKey, type AssetIdentity } from "./assetId";
 import {
   indexedActiveContracts,
@@ -116,17 +116,11 @@ export interface ContractStoragePage {
  */
 export const getContractStorage = cache(
   async (contractId: string, after?: string): Promise<ContractStoragePage | null> => {
-    if (!StrKey.isValidContract(contractId) || !(await indexerActive())) return null;
+    if (!StrKey.isValidContract(contractId)) return null;
     if (after && !/^[0-9a-f]{64}$/.test(after)) return null;
-    try {
-      return await indexedContractStorage(contractId, after);
-    } catch (error) {
-      console.warn(
-        "[indexer] contract storage failed:",
-        error instanceof Error ? error.message : error,
-      );
-      return null;
-    }
+    return indexerRead(`contract ${contractId.slice(0, 6)} storage`, () =>
+      indexedContractStorage(contractId, after),
+    );
   },
 );
 
@@ -252,18 +246,10 @@ export const getTokenInfo = cache(async (contractId: string): Promise<TokenInfo 
 
 /** Who deployed it and when. Only the indexer knows, and only since its go-live. */
 export const getContractCreation = cache(
-  async (contractId: string): Promise<ContractCreation | null> => {
-    if (!(await indexerActive())) return null;
-    try {
-      return await indexedContractCreation(contractId);
-    } catch (error) {
-      console.warn(
-        "[indexer] contract creation failed:",
-        error instanceof Error ? error.message : error,
-      );
-      return null;
-    }
-  },
+  async (contractId: string): Promise<ContractCreation | null> =>
+    indexerRead(`contract ${contractId.slice(0, 6)} creation`, () =>
+      indexedContractCreation(contractId),
+    ),
 );
 
 // parsing a spec means RPC round-trips, so completed lookups stick around a while

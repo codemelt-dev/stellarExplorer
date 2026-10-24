@@ -50,7 +50,8 @@ The humanizer covers all 27 operation types (24 classic, plus `invoke_host_funct
 | Top holders, asset and contract directories | indexer only | not available |
 | Accounts: balances, signers, flags, data entries | indexer (PostgREST); Horizon fallback | Horizon |
 | Account history and "Your activity" | indexer (ClickHouse) through `/api/accounts/[id]/activity` for the latter; Horizon for history before 6 October 2026 and as fallback | Horizon |
-| Transaction detail | Horizon, with RPC and the AWS ledger archive for Soroban results | Horizon and RPC |
+| Transaction detail: operations, contract calls, return values, events, balance changes | indexer (ClickHouse); Horizon for transactions before 6 October 2026 and as fallback | Horizon, with RPC and the AWS ledger archive for Soroban results |
+| Transaction raw XDR (XDR tab) | Horizon through `/api/tx/[hash]/raw`, only when the tab is opened; RPC or the AWS ledger archive for the meta | Horizon and RPC |
 | Live ledger pulse | indexer, polled every second through `/api/ledgers/live`; Horizon SSE fallback | Horizon SSE |
 | Live operations feed | Horizon SSE | Horizon SSE |
 | Network growth, account totals | indexer; stellar.expert fallback | same (always mainnet figures) |
@@ -59,7 +60,21 @@ The humanizer covers all 27 operation types (24 classic, plus `invoke_host_funct
 | TVL, protocols, DEX volume and trades | DefiLlama, Horizon | same (always mainnet) |
 | Issuer names and icons | SEP-1 `stellar.toml` from the issuer's home domain | same |
 
-Indexer reads with another source go through `withIndexer` in [`lib/stellar/indexer/client.ts`](lib/stellar/indexer/client.ts). When the indexer isn't configured, fails or has no record, the page reads the old source instead and the server logs `[indexer] <what> failed, falling back`. Reads with no other source (top holders, the directories) show an unavailable state instead.
+Indexer reads with another source go through `withIndexer` in [`lib/stellar/indexer/client.ts`](lib/stellar/indexer/client.ts). When the indexer isn't configured, fails or has no record, the page reads the old source instead. Reads with no other source (top holders, contract storage and creation, the directories) show an unavailable state instead.
+
+### Request accounting
+
+Every indexer read logs one line on the server, in production too:
+
+```
+[indexer] transaction: indexer 212ms
+[indexer] contract CDL74R events: indexer 138ms
+[indexer] account history: fallback (not indexed)
+[indexer] transaction: fallback (failed) ClickHouse 503: ...
+[horizon] tx raw bf74c998
+```
+
+`indexer` means the indexer answered. `fallback` means the old source did, and why. `[horizon] tx raw` is the XDR tab, the only Horizon read on an indexer-served transaction page. On Vercel: project, Logs, search `[indexer]`. Vercel keeps logs for a short time, so export them during a review window.
 
 The indexed history starts at ledger 64,806,592 (6 October 2026), the indexer's go-live. Backfilling it to genesis is the next milestone.
 
@@ -133,8 +148,9 @@ See [the coverage and fixture guide](e2e/README.md) for the scenarios and how to
 ## Known limitations
 
 - The indexer covers mainnet only, from 6 October 2026; the full history backfill is next.
-- Transaction detail and the live operations feed still read Horizon.
-- Indexed account history leaves out the shares a pool deposit received; the indexer keeps the request, not the result.
+- The live operations feed still reads Horizon.
+- Indexer-served transaction pages leave out the signature count, validity window and contract resources: they come from the envelope, which the indexer doesn't store. The XDR tab still has the signatures.
+- Indexed account history and transaction pages leave out the shares a pool deposit received; the indexer keeps the request, not the result.
 - The ledger detail page has no loading skeleton yet.
 - Without a mainnet RPC provider, mainnet Soroban data has no fallback when the indexer misses.
 - Testnet rides public endpoints and their rate limits.

@@ -9,6 +9,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   if (!/^[0-9a-f]{64}$/i.test(hash)) {
     return new Response(null, { status: 400, headers: { "Cache-Control": "no-store" } });
   }
+  // counted with the [indexer] lines: Horizon is only asked when XDR is opened
+  console.info(`[horizon] tx raw ${hash.slice(0, 8)}`);
   try {
     const raw = await getTransactionRaw(hash);
     // a closed transaction never changes
