@@ -13,6 +13,7 @@ import { Address } from "@/components/stellar/Address";
 import { Time } from "@/components/stellar/Time";
 import { Amount } from "@/components/stellar/Amount";
 import { TxRawCard } from "@/components/tx/TxRawCard";
+import { RawXdr } from "@/components/tx/RawXdr";
 import { ContractEvents } from "@/components/tx/ContractEvents";
 import { CopyButton } from "@/components/stellar/CopyButton";
 import { EmptyState } from "@/components/states/EmptyState";
@@ -330,7 +331,8 @@ export default async function TransactionPage({
         <TabsContent value="balances">
           <BalanceChanges
             effects={tx.effects}
-            sorobanMovements={tx.movements}
+            movements={tx.movements}
+            notes={tx.notes}
             tokens={tokens}
             feeCharged={tx.feeCharged}
             feeAccount={tx.feeAccount}
@@ -339,7 +341,7 @@ export default async function TransactionPage({
         </TabsContent>
 
         <TabsContent value="raw">
-          {tx.raw && <TxRawCard raw={tx.raw} />}
+          {tx.raw ? <TxRawCard raw={tx.raw} /> : <RawXdr hash={tx.hash} />}
         </TabsContent>
       </Tabs>
     </div>

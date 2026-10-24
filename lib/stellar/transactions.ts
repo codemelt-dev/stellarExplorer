@@ -28,6 +28,7 @@ import {
 } from "./xdrDecode";
 import { withIndexer } from "./indexer/client";
 import { indexedRecentTransactions } from "./indexer/transactions";
+import { indexedTransactionDetail } from "./indexer/txDetail";
 
 export type TransactionRecord = Horizon.ServerApi.TransactionRecord;
 export type OperationRecord = Horizon.ServerApi.OperationRecord;
@@ -197,12 +198,16 @@ export function fromHorizon(
     notes: [],
     preconditions: parsePreconditions(tx.envelope_xdr),
     resources: ops.some(isContractCall) ? parseSorobanResources(tx.envelope_xdr) : null,
-    raw: {
-      signatures: tx.signatures,
-      envelope: tx.envelope_xdr,
-      result: tx.result_xdr,
-      meta: metaXdr ?? "",
-    },
+    raw: rawOf(tx, metaXdr),
+  };
+}
+
+function rawOf(tx: TransactionRecord, metaXdr: string | undefined): TxRaw {
+  return {
+    signatures: tx.signatures,
+    envelope: tx.envelope_xdr,
+    result: tx.result_xdr,
+    meta: metaXdr ?? "",
   };
 }
 
@@ -216,10 +221,29 @@ async function horizonTransactionDetail(hash: string): Promise<TxDetail> {
   return fromHorizon(tx, ops, effects, meta, (await activeNetwork()).passphrase);
 }
 
-/** The transaction page's data. Throws NotFoundError when there's no such tx. */
+/**
+ * The transaction page's data: the indexer, Horizon for anything it doesn't
+ * have. Throws NotFoundError when neither knows the hash.
+ */
 export const getTransactionDetail = cache(
-  (hash: string): Promise<TxDetail> => horizonTransactionDetail(hash),
+  async (hash: string): Promise<TxDetail> => {
+    const { passphrase } = await activeNetwork();
+    return withIndexer(
+      "transaction",
+      () => indexedTransactionDetail(hash, passphrase),
+      () => horizonTransactionDetail(hash),
+    );
+  },
 );
+
+/**
+ * Raw XDR for the XDR tab when the page came from the indexer, which keeps
+ * none: Horizon, meta from RPC or the archive. Throws NotFoundError.
+ */
+export async function getTransactionRaw(hash: string): Promise<TxRaw> {
+  const [tx, ops] = await Promise.all([getTransaction(hash), getTransactionOperations(hash)]);
+  return rawOf(tx, await resultMeta(tx, ops));
+}
 
 export interface TxRow {
   hash: string;
