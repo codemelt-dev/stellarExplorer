@@ -45,7 +45,7 @@ The humanizer covers all 27 operation types (24 classic, plus `invoke_host_funct
 | Data | Mainnet | Testnet |
 |---|---|---|
 | Ledgers, recent transactions | indexer (ClickHouse); Horizon fallback | Horizon |
-| Contracts: summary, storage, interface, events, WASM | indexer (ClickHouse and PostgREST); RPC fallback | Stellar RPC |
+| Contracts: summary, storage, interface, events, WASM | indexer (ClickHouse and PostgREST); RPC fallback. Events go back to go-live, 100 at a time: older batches load through `/api/contracts/[id]/events` when the last page is reached | Stellar RPC (recent events only) |
 | Asset supply and holder count | indexer; Horizon fallback | Horizon |
 | Top holders, asset and contract directories | indexer only | not available |
 | Accounts: balances, signers, flags, data entries | indexer (PostgREST); Horizon fallback | Horizon |

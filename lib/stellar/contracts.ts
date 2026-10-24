@@ -3,7 +3,12 @@ import { cache } from "react";
 import { Address, StrKey, xdr, scValToNative, contract } from "@stellar/stellar-sdk";
 import { Server } from "@stellar/stellar-sdk/rpc";
 import { activeNetwork } from "./network";
-import { toDecodedValue, type DecodedValue } from "./xdrDecode";
+import {
+  describeTokenEvent,
+  toDecodedValue,
+  type DecodedValue,
+  type TokenEventDescription,
+} from "./xdrDecode";
 import {
   instanceSummary,
   specFunctions,
@@ -298,17 +303,63 @@ export interface ContractEventItem {
   createdAt: string;
   topics: DecodedValue[];
   data: DecodedValue;
+  /** A standard token event (transfer, mint, ...), read as a sentence. */
+  token?: TokenEventDescription | null;
 }
 
-/** Recent events: indexer on mainnet, else RPC, which only scans a bounded window. */
+export interface ContractEventsPage {
+  events: ContractEventItem[];
+  /** Cursor of the next older batch; null at the end, and always on RPC. */
+  next: string | null;
+}
+
+// token events read as sentences; done here so the browser gets them ready
+async function withTokens(
+  contractId: string,
+  page: ContractEventsPage | null,
+): Promise<ContractEventsPage | null> {
+  if (!page) return null;
+  const { passphrase } = await activeNetwork();
+  return {
+    ...page,
+    events: page.events.map((event) => ({
+      ...event,
+      token: describeTokenEvent({ contractId, topics: event.topics, data: event.data }, passphrase),
+    })),
+  };
+}
+
+/**
+ * Newest events: the indexer on mainnet, older batches through
+ * getOlderContractEvents. Else RPC, which only scans a bounded window.
+ */
 export const getContractEvents = cache(
-  async (contractId: string): Promise<ContractEventItem[] | null> =>
-    withIndexer(
-      `contract ${contractId.slice(0, 6)} events`,
-      () => indexedContractEvents(contractId),
-      () => rpcContractEvents(contractId),
+  async (contractId: string): Promise<ContractEventsPage | null> =>
+    withTokens(
+      contractId,
+      await withIndexer(
+        `contract ${contractId.slice(0, 6)} events`,
+        () => indexedContractEvents(contractId),
+        async () => {
+          const events = await rpcContractEvents(contractId);
+          return events && { events, next: null };
+        },
+      ),
     ),
 );
+
+/** The batch older than `before`. Indexer only, nothing else keeps that history. */
+export async function getOlderContractEvents(
+  contractId: string,
+  before: string,
+): Promise<ContractEventsPage | null> {
+  return withTokens(
+    contractId,
+    await indexerRead(`contract ${contractId.slice(0, 6)} older events`, () =>
+      indexedContractEvents(contractId, before),
+    ),
+  );
+}
 
 async function rpcContractEvents(contractId: string): Promise<ContractEventItem[] | null> {
   const server = await rpcServer();

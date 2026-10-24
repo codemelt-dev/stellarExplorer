@@ -9,7 +9,7 @@ import { Address } from "@/components/stellar/Address";
 import { Identicon } from "@/components/stellar/Identicon";
 import { CopyButton } from "@/components/stellar/CopyButton";
 import { ScValView } from "@/components/stellar/ScValView";
-import { TokenEventSentence } from "@/components/stellar/TokenEventSentence";
+import { EventList } from "@/components/contract/EventList";
 import { Time } from "@/components/stellar/Time";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
@@ -23,7 +23,7 @@ import {
   getContractSummary,
 } from "@/lib/stellar/contracts";
 import { contractAsset, tokenMetadata } from "@/lib/stellar/contractDecode";
-import { describeTokenEvent, type DecodedValue } from "@/lib/stellar/xdrDecode";
+import type { DecodedValue } from "@/lib/stellar/xdrDecode";
 import { truncateKey } from "@/lib/stellar/strkey";
 
 export async function generateMetadata({
@@ -223,58 +223,10 @@ export default async function ContractPage({
           <Card id="events" className="scroll-mt-24 gap-4 p-5">
             {events === null ? (
               <EmptyState message="Couldn't load events for this contract. Try again in a moment." />
-            ) : events.length === 0 ? (
+            ) : events.events.length === 0 ? (
               <EmptyState message="No events from this contract. Many contracts emit none of their own: their activity shows up as calls, and as events of the tokens they move." />
             ) : (
-              <PagedList topId="events" className="flex flex-col">
-                {events.map((event, i) => {
-                  const token = describeTokenEvent(
-                    { contractId: id, topics: event.topics, data: event.data },
-                    network.passphrase,
-                  );
-                  const when = (
-                    <Link
-                      href={`/tx/${event.txHash}`}
-                      className="shrink-0 rounded-sm"
-                      aria-label="View transaction"
-                    >
-                      <Time iso={event.createdAt} className="hover:text-foreground" />
-                    </Link>
-                  );
-                  return (
-                    <div
-                      key={`${event.txHash}-${i}`}
-                      className="flex flex-col gap-1.5 border-b border-border py-3 first:pt-0 last:border-b-0 last:pb-0"
-                    >
-                      {token ? (
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                          <TokenEventSentence event={token} info={ownToken} />
-                          {when}
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="flex flex-wrap gap-1">
-                              {event.topics.map((topic, j) => (
-                                <span
-                                  key={j}
-                                  className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-contract"
-                                >
-                                  <ScValView value={topic} />
-                                </span>
-                              ))}
-                            </span>
-                            {when}
-                          </div>
-                          <div className="pl-1">
-                            <ScValView value={event.data} />
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </PagedList>
+              <EventList contractId={id} first={events} ownToken={ownToken} />
             )}
           </Card>
         </TabsContent>
