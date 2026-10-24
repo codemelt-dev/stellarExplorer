@@ -3,7 +3,12 @@ import { cache } from "react";
 import { Address, StrKey, xdr, scValToNative, contract } from "@stellar/stellar-sdk";
 import { Server } from "@stellar/stellar-sdk/rpc";
 import { activeNetwork } from "./network";
-import { toDecodedValue, type DecodedValue } from "./xdrDecode";
+import {
+  describeTokenEvent,
+  toDecodedValue,
+  type DecodedValue,
+  type TokenEventDescription,
+} from "./xdrDecode";
 import {
   instanceSummary,
   specFunctions,
@@ -12,7 +17,7 @@ import {
   type ContractSummary,
   type TokenInfo,
 } from "./contractDecode";
-import { indexerActive, withIndexer } from "./indexer/client";
+import { indexerActive, indexerRead, withIndexer } from "./indexer/client";
 import { fromAssetKey, type AssetIdentity } from "./assetId";
 import {
   indexedActiveContracts,
@@ -116,17 +121,11 @@ export interface ContractStoragePage {
  */
 export const getContractStorage = cache(
   async (contractId: string, after?: string): Promise<ContractStoragePage | null> => {
-    if (!StrKey.isValidContract(contractId) || !(await indexerActive())) return null;
+    if (!StrKey.isValidContract(contractId)) return null;
     if (after && !/^[0-9a-f]{64}$/.test(after)) return null;
-    try {
-      return await indexedContractStorage(contractId, after);
-    } catch (error) {
-      console.warn(
-        "[indexer] contract storage failed:",
-        error instanceof Error ? error.message : error,
-      );
-      return null;
-    }
+    return indexerRead(`contract ${contractId.slice(0, 6)} storage`, () =>
+      indexedContractStorage(contractId, after),
+    );
   },
 );
 
@@ -252,18 +251,10 @@ export const getTokenInfo = cache(async (contractId: string): Promise<TokenInfo 
 
 /** Who deployed it and when. Only the indexer knows, and only since its go-live. */
 export const getContractCreation = cache(
-  async (contractId: string): Promise<ContractCreation | null> => {
-    if (!(await indexerActive())) return null;
-    try {
-      return await indexedContractCreation(contractId);
-    } catch (error) {
-      console.warn(
-        "[indexer] contract creation failed:",
-        error instanceof Error ? error.message : error,
-      );
-      return null;
-    }
-  },
+  async (contractId: string): Promise<ContractCreation | null> =>
+    indexerRead(`contract ${contractId.slice(0, 6)} creation`, () =>
+      indexedContractCreation(contractId),
+    ),
 );
 
 // parsing a spec means RPC round-trips, so completed lookups stick around a while
@@ -312,17 +303,63 @@ export interface ContractEventItem {
   createdAt: string;
   topics: DecodedValue[];
   data: DecodedValue;
+  /** A standard token event (transfer, mint, ...), read as a sentence. */
+  token?: TokenEventDescription | null;
 }
 
-/** Recent events: indexer on mainnet, else RPC, which only scans a bounded window. */
+export interface ContractEventsPage {
+  events: ContractEventItem[];
+  /** Cursor of the next older batch; null at the end, and always on RPC. */
+  next: string | null;
+}
+
+// token events read as sentences; done here so the browser gets them ready
+async function withTokens(
+  contractId: string,
+  page: ContractEventsPage | null,
+): Promise<ContractEventsPage | null> {
+  if (!page) return null;
+  const { passphrase } = await activeNetwork();
+  return {
+    ...page,
+    events: page.events.map((event) => ({
+      ...event,
+      token: describeTokenEvent({ contractId, topics: event.topics, data: event.data }, passphrase),
+    })),
+  };
+}
+
+/**
+ * Newest events: the indexer on mainnet, older batches through
+ * getOlderContractEvents. Else RPC, which only scans a bounded window.
+ */
 export const getContractEvents = cache(
-  async (contractId: string): Promise<ContractEventItem[] | null> =>
-    withIndexer(
-      `contract ${contractId.slice(0, 6)} events`,
-      () => indexedContractEvents(contractId),
-      () => rpcContractEvents(contractId),
+  async (contractId: string): Promise<ContractEventsPage | null> =>
+    withTokens(
+      contractId,
+      await withIndexer(
+        `contract ${contractId.slice(0, 6)} events`,
+        () => indexedContractEvents(contractId),
+        async () => {
+          const events = await rpcContractEvents(contractId);
+          return events && { events, next: null };
+        },
+      ),
     ),
 );
+
+/** The batch older than `before`. Indexer only, nothing else keeps that history. */
+export async function getOlderContractEvents(
+  contractId: string,
+  before: string,
+): Promise<ContractEventsPage | null> {
+  return withTokens(
+    contractId,
+    await indexerRead(`contract ${contractId.slice(0, 6)} older events`, () =>
+      indexedContractEvents(contractId, before),
+    ),
+  );
+}
 
 async function rpcContractEvents(contractId: string): Promise<ContractEventItem[] | null> {
   const server = await rpcServer();

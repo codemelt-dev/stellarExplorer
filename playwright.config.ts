@@ -20,6 +20,22 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "retain-on-failure",
     serviceWorkers: "block",
+    // the app opens on mainnet; most scenarios are written against testnet
+    storageState: {
+      cookies: [
+        {
+          name: "network",
+          value: "testnet",
+          domain: "127.0.0.1",
+          path: "/",
+          expires: -1,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ],
+      origins: [],
+    },
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },

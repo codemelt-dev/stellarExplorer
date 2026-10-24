@@ -1,12 +1,7 @@
 import { Address } from "./Address";
 import { Amount } from "./Amount";
-import { truncateKey } from "@/lib/stellar/strkey";
+import { AssetCode } from "./AssetCode";
 import type { Segment } from "@/lib/stellar/humanize";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 // renders humanize() segments with the real components inline
 export function OpSentence({ segments }: { segments: Segment[] }) {
@@ -35,23 +30,13 @@ export function OpSentence({ segments }: { segments: Segment[] }) {
               />
             );
           case "asset":
-            return segment.assetIssuer ? (
-              <Tooltip key={i}>
-                <TooltipTrigger asChild>
-                  <span className="cursor-help font-mono text-sm">
-                    {segment.assetCode}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <span className="font-mono text-xs">
-                    issued by {truncateKey(segment.assetIssuer)}
-                  </span>
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <span key={i} className="font-mono text-sm">
-                {segment.assetCode}
-              </span>
+            return (
+              <AssetCode
+                key={i}
+                code={segment.assetCode}
+                issuer={segment.assetIssuer}
+                className="font-mono text-sm"
+              />
             );
           case "code":
             return (

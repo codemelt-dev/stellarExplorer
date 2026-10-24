@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { Networks } from "@stellar/stellar-sdk";
-import { describeTokenEvent, sorobanTokenMovements, type DecodedContractEvent, type DecodedValue } from "./xdrDecode";
+import {
+  describeTokenEvent,
+  sorobanTokenMovements,
+  txErrorFromCodes,
+  type DecodedContractEvent,
+  type DecodedValue,
+} from "./xdrDecode";
 
 const ISSUER = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
 // the real mainnet contract ids of USDC and of native XLM
@@ -109,5 +115,25 @@ describe("sorobanTokenMovements", () => {
       [ALICE, "out", "USDC"],
       [BOB, "in", "USDC"],
     ]);
+  });
+});
+
+describe("txErrorFromCodes", () => {
+  it("reads like decodeTxError: failing operations named, successful ones left out", () => {
+    expect(txErrorFromCodes(-1, ["payment_success", "path_payment_strict_receive_over_sendmax"])).toEqual({
+      transactionCode: "transaction failed",
+      operationCodes: ["path payment strict receive over sendmax"],
+    });
+  });
+
+  it("names operation-level codes and fee bump results", () => {
+    expect(txErrorFromCodes(-13, ["op_no_account", ""])).toEqual({
+      transactionCode: "transaction fee bump inner failed",
+      operationCodes: ["operation no account"],
+    });
+  });
+
+  it("keeps an unknown code readable", () => {
+    expect(txErrorFromCodes(-99, []).transactionCode).toBe("transaction result -99");
   });
 });
