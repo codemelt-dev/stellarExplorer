@@ -130,6 +130,8 @@ export interface TxDetail {
   flow: TxFlow;
   effects: EffectRecord[];
   movements: TokenMovement[];
+  /** Changes that move no money (trustlines, signers), when effects don't cover them. */
+  notes: Array<{ account: string; label: string }>;
   // envelope only, null when the source doesn't keep the envelope
   preconditions: TxPreconditions | null;
   resources: SorobanResources | null;
@@ -192,6 +194,7 @@ export function fromHorizon(
     flow: envelopeFlow(tx.envelope_xdr, tx.source_account),
     effects,
     movements: sorobanTokenMovements(events, passphrase),
+    notes: [],
     preconditions: parsePreconditions(tx.envelope_xdr),
     resources: ops.some(isContractCall) ? parseSorobanResources(tx.envelope_xdr) : null,
     raw: {

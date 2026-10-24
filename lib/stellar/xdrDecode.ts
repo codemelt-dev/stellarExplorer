@@ -262,6 +262,8 @@ export interface TokenMovement {
   /** set when the token is a Stellar asset's own contract. */
   asset?: AssetRef;
   kind: "transfer" | "mint" | "burn" | "clawback";
+  /** Overrides the kind's wording, e.g. "trade filled". */
+  label?: string;
 }
 
 export interface TokenEventDescription {
@@ -420,6 +422,27 @@ export function decodeTxError(resultXdr: string): DecodedTxError | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Same reason as decodeTxError, from stored result codes: the transaction's
+ * as a number (-1), each operation's as a name ("payment_underfunded").
+ */
+export function txErrorFromCodes(resultCode: number, opCodes: string[]): DecodedTxError {
+  // fromValue exists at runtime, the sdk's typings leave it out
+  const codes = xdr.TransactionResultCode as unknown as { fromValue(value: number): { name: string } };
+  let transactionCode: string;
+  try {
+    transactionCode = humanCode(codes.fromValue(resultCode).name);
+  } catch {
+    transactionCode = `transaction result ${resultCode}`;
+  }
+  return {
+    transactionCode,
+    operationCodes: opCodes
+      .filter((code) => code && !/success$/.test(code))
+      .map((code) => code.replace(/^op_/, "operation ").replace(/_/g, " ")),
+  };
 }
 
 export interface SorobanResources {
