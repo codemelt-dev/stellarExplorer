@@ -1,10 +1,12 @@
 ![Astrolabe](.github/astrolabe.png)
 
-The frontend of a Stellar block explorer.
+# Astrolabe Explorer
 
-Every transaction, operation and contract call reads as a plain sentence, and the raw XDR is one toggle away. Mainnet data comes from our own indexer, [astrolabe-backend](https://github.com/codemelt-dev/astrolabe-backend). Testnet, and anything the indexer can't answer, comes from public Horizon and Stellar RPC.
+The frontend of [Astrolabe](https://astrostellar.xyz), a Stellar block explorer and analytics platform. It is built by [Codemelt](https://codemelt.com) and funded by the Stellar Community Fund (SCF #45). Product docs are in the [Astrolabe GitBook](https://codemelt.gitbook.io/astrolabe-docs).
 
-Live at https://stellar-explorer-tau.vercel.app
+Every transaction, operation and contract call reads as a plain sentence, and the raw XDR is one toggle away. Mainnet data comes from our own indexer, [astrolabe-be](https://github.com/codemelt-dev/astrolabe-be). Testnet, and anything the indexer can't answer, comes from public Horizon and Stellar RPC.
+
+Live at https://astrostellar.xyz
 
 ```text
                                  browser
@@ -21,7 +23,7 @@ Live at https://stellar-explorer-tau.vercel.app
   mainnet only                                                 AWS ledger archive
 ```
 
-One exception to that path: the browser streams the live operations feed (and, on testnet, the ledger pulse) straight from Horizon.
+One exception to that path: on testnet, or when the indexer fails, the browser streams the live operations feed and the ledger pulse straight from Horizon.
 
 ## What it shows
 
@@ -50,7 +52,7 @@ The humanizer covers all 27 operation types (24 classic, plus `invoke_host_funct
 | Top holders, asset and contract directories | indexer only | not available |
 | Accounts: balances, signers, flags, data entries | indexer (PostgREST); Horizon fallback | Horizon |
 | Account history and "Your activity" | indexer (ClickHouse) through `/api/accounts/[id]/activity` for the latter; Horizon for history before 6 October 2026 and as fallback | Horizon |
-| Transaction detail: operations, contract calls, return values, events, balance changes | indexer (ClickHouse); Horizon for transactions before 6 October 2026 and as fallback | Horizon, with RPC and the AWS ledger archive for Soroban results |
+| Transaction detail: operations, contract calls, return values, events, balance changes | indexer (ClickHouse); Horizon, with RPC and the AWS ledger archive for Soroban results, for transactions before 6 October 2026 and as fallback | Horizon, with RPC for Soroban results |
 | Transaction raw XDR (XDR tab) | Horizon through `/api/tx/[hash]/raw`, only when the tab is opened; RPC or the AWS ledger archive for the meta | Horizon and RPC |
 | Live ledger pulse | indexer, polled every second through `/api/ledgers/live`; Horizon SSE fallback | Horizon SSE |
 | Live operations feed | indexer, polled every 20 seconds through `/api/operations/live`; Horizon SSE fallback | Horizon SSE |
@@ -157,5 +159,5 @@ See [the coverage and fixture guide](e2e/README.md) for the scenarios and how to
 
 ## Related
 
-- [astrolabe-backend](https://github.com/codemelt-dev/astrolabe-backend): the indexer. Galexie ingestion, PostgreSQL with PostgREST, ClickHouse, and the `lab` setup CLI.
+- [astrolabe-be](https://github.com/codemelt-dev/astrolabe-be): the indexer. Galexie ingestion, PostgreSQL with PostgREST, ClickHouse, and the `lab` setup CLI.
 - [Astrolabe docs](https://codemelt.gitbook.io/astrolabe-docs/): roadmap and milestones.
