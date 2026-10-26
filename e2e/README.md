@@ -26,9 +26,8 @@ development or live server. Every run builds into `.next-e2e` and clears its
 upstream data cache. No `.env` file is needed: the configuration overrides
 Horizon, RPC and indexer settings with reserved `.invalid` hosts and synthetic
 credentials. The test build uses Next's Google Fonts mock hook with a
-valid font bundled in Next, so it does not download fonts. It selects Next's
-webpack builder because Turbopack rejects a `node_modules` symlink that points
-outside an isolated Git worktree. Initial dependency and browser installation
+valid font bundled in Next, so it does not download fonts, and builds with
+webpack rather than Turbopack. Initial dependency and browser installation
 still require network access when they are not already cached. Font substitution
 is limited to the E2E build; this suite makes no pixel or typography assertions.
 
@@ -92,22 +91,20 @@ References: [Playwright network mocking](https://playwright.dev/docs/mock),
 [Playwright web servers](https://playwright.dev/docs/test-webserver),
 [Nock network isolation](https://github.com/nock/nock#disabling-requests).
 
-## CI evidence and limitations
+## CI
 
-`.github/workflows/playwright.yml` runs the locked install, test lint, existing
-unit suite and both browser projects on every push/PR, with a manual trigger too.
-Production build/type errors fail the job. The HTML report is always retained;
-failures retain screenshots, video and traces. The network audit log is uploaded
-as well. Open Actions → **Playwright browser tests** after pushing these changes
-and link that run for the deliverable. Local runs do not establish a public CI run.
+`.github/workflows/playwright.yml` runs the locked install, test lint, the unit
+suite and both browser projects on every push and pull request, and can be
+started by hand. Production build and type errors fail the job. The HTML report
+is always kept; failures also keep screenshots, video and traces, and the
+network audit log is uploaded with every run. Results are under Actions →
+**Playwright browser tests**.
 
-The workflow lints the browser suite. Existing application lint failures are
-outside this test-only work; the application's lint rules remain enabled.
+## Limitations
 
-The regression tests exposed and cover a fixed navigation defect: CODE-ISSUER
-queries previously opened a nonexistent `/asset/...` route. They now use the
-implemented search page with the issuer passed to Horizon's asset filter.
+The workflow lints the browser suite only; the application's own lint rules run
+separately with `bun run lint`.
 
 Live provider authentication, retention windows and current upstream response
-shapes require a separate integration check with known records. Those checks are
-outside this deterministic browser suite.
+shapes need a separate integration check with known records. They are outside
+this deterministic browser suite.
