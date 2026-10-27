@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
 const SAMPLE_ACCOUNT = "GA5XW2R4ALW4FLZK74Z6Z3MOBLOI2LFQ3RBZKOV2NVWCVCBNRMSJWQXH";
 const SAMPLE_CONTRACT = "CBDKSXMVAX72JC45Q7QW2CA7YXCEL5KGUWCPA5ZKOYAKUIZ3BBRZMS6G";
 
-// legend tab docked to the left edge. Expands on hover, tap toggles on touch
+// legend tab docked to the left edge. Expands on hover, tap toggles on touch.
+// Tablet and up only: on a phone it covers the content
 export function LegendFlyout() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -33,7 +34,7 @@ export function LegendFlyout() {
   return (
     <div
       ref={rootRef}
-      className="fixed left-0 top-1/2 z-50 flex -translate-y-1/2 items-center"
+      className="fixed left-0 top-1/2 z-50 hidden -translate-y-1/2 items-center md:flex"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
