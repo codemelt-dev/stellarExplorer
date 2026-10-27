@@ -145,7 +145,6 @@ See [the coverage and fixture guide](e2e/README.md) for the scenarios and how to
 ## Known limitations
 
 - The indexer covers mainnet only, from 6 October 2026; the full history backfill is next.
-- The ledger detail page has no loading skeleton yet.
 - Testnet rides public endpoints and their rate limits.
 - Federation addresses (`name*domain`) are recognized in search but not resolved yet.
 
