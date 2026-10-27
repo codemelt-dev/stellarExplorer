@@ -36,7 +36,7 @@ One exception to that path: on testnet, or when the indexer fails, the browser s
 | Assets | `/asset/[id]`, `/assets` | supply, holders and top holders; a ranked asset directory |
 | Ledgers | `/ledger/[sequence]`, `/ledgers` | close metadata, transactions, previous and next ledger |
 | DeFi | `/defi/[slug]` | per-protocol TVL and volume; recent trades on the Stellar DEX page |
-| Search | `/search` | `G`/`M`/`C` addresses, transaction hashes, ledger numbers and asset codes |
+| Search | `/search` | `G`/`M`/`C` addresses, transaction hashes, ledger numbers, asset codes and federation addresses (`name*domain`, resolved in the browser through the domain's `stellar.toml`) |
 
 The site opens on mainnet. The header switches to testnet and back, and connects a wallet read-only (Freighter, xBull). Analytics and liquidity pools are placeholder pages until the indexer's full history lands.
 
@@ -146,7 +146,6 @@ See [the coverage and fixture guide](e2e/README.md) for the scenarios and how to
 
 - The indexer covers mainnet only, from 6 October 2026; the full history backfill is next.
 - Testnet rides public endpoints and their rate limits.
-- Federation addresses (`name*domain`) are recognized in search but not resolved yet.
 
 ## Related
 
