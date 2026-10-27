@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Address } from "@/components/stellar/Address";
 import { EmptyState } from "@/components/states/EmptyState";
 import { SearchBox } from "@/components/layout/SearchBox";
+import { FederationLookup } from "@/components/stellar/FederationLookup";
 import { searchAssetsByCode } from "@/lib/stellar/assets";
 import { resolveQuery } from "@/lib/stellar/resolveQuery";
 
@@ -28,7 +29,9 @@ export default async function SearchPage({
       <h1 className="text-xl font-semibold tracking-tight">Search</h1>
       <SearchBox large className="max-w-xl" />
 
-      {resolved.type === "asset" && assets.length > 0 ? (
+      {resolved.type === "federation" ? (
+        <FederationLookup key={resolved.address} address={resolved.address} />
+      ) : resolved.type === "asset" && assets.length > 0 ? (
         <section className="flex flex-col gap-3">
           <h2 className="text-base font-semibold">
             Assets matching <span className="font-mono">{resolved.code}</span>
@@ -67,16 +70,11 @@ export default async function SearchPage({
         />
       ) : (
         <EmptyState
-          message="Paste anything: an account, a contract, a transaction hash, a ledger number, an asset code."
+          message="Paste anything: an account, a contract, a transaction hash, a ledger number, an asset code, or name*domain.com."
           className="py-16"
         />
       )}
 
-      {resolved.type === "federation" && (
-        <EmptyState
-          message={`Federation lookups (${q}) aren't wired up yet. Resolving via SEP-2 is on the roadmap. Paste the account address directly for now.`}
-        />
-      )}
       <p className="text-center">
         <Link href="/" className="text-sm text-gold hover:underline underline-offset-4">
           ← Back to the pulse
