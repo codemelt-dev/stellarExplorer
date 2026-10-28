@@ -179,3 +179,49 @@ export function layoutHolders(holders: MapHolder[], links: MapLink[]): HolderLay
     },
   };
 }
+
+/** The part of the layout on screen, in layout units. */
+export interface MapView {
+  x: number;
+  y: number;
+  size: number;
+}
+
+export const MAX_ZOOM = 24;
+
+/** Keeps the view inside the box, between the whole box and MAX_ZOOM. */
+export function clampView(view: MapView, box: MapView): MapView {
+  const size = Math.min(box.size, Math.max(box.size / MAX_ZOOM, view.size));
+  return {
+    x: Math.min(box.x + box.size - size, Math.max(box.x, view.x)),
+    y: Math.min(box.y + box.size - size, Math.max(box.y, view.y)),
+    size,
+  };
+}
+
+/**
+ * Zooms in by `factor` (below 1 zooms out) around a point given as fractions
+ * of the view, which stays under the cursor.
+ */
+export function zoomAt(view: MapView, box: MapView, factor: number, fx = 0.5, fy = 0.5): MapView {
+  const size = Math.min(box.size, Math.max(box.size / MAX_ZOOM, view.size / factor));
+  const px = view.x + fx * view.size;
+  const py = view.y + fy * view.size;
+  return clampView({ x: px - fx * size, y: py - fy * size, size }, box);
+}
+
+/** Moves the view by fractions of its own size, as a drag does. */
+export function panBy(view: MapView, box: MapView, dx: number, dy: number): MapView {
+  return clampView({ x: view.x - dx * view.size, y: view.y - dy * view.size, size: view.size }, box);
+}
+
+export type BubbleLine = "rank" | "share" | "address" | "balance";
+
+/** What a bubble has room to say at its size on screen, in pixels of radius. */
+export function bubbleLines(radiusPx: number): BubbleLine[] {
+  if (radiusPx >= 56) return ["rank", "share", "address", "balance"];
+  if (radiusPx >= 40) return ["rank", "share", "address"];
+  if (radiusPx >= 24) return ["rank", "share"];
+  if (radiusPx >= 9) return ["rank"];
+  return [];
+}

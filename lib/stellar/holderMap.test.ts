@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { clustersOf, layoutHolders, radiusOf, type MapHolder } from "./holderMap";
+import {
+  bubbleLines,
+  clampView,
+  clustersOf,
+  layoutHolders,
+  panBy,
+  radiusOf,
+  zoomAt,
+  type MapHolder,
+} from "./holderMap";
 
 const holder = (rank: number, balance: number, share: number | null = balance / 10): MapHolder => ({
   rank,
@@ -70,5 +79,41 @@ describe("layoutHolders", () => {
       [1, 5],
       [3, 4],
     ]);
+  });
+});
+
+describe("zoom", () => {
+  const box = { x: -100, y: -100, size: 200 };
+
+  it("keeps the point under the cursor still", () => {
+    const view = zoomAt(box, box, 2, 0.25, 0.75);
+    expect(view).toEqual({ x: -75, y: -25, size: 100 });
+    // the point at 25% / 75% of the view was (-50, 50) before and still is
+    expect([view.x + 0.25 * view.size, view.y + 0.75 * view.size]).toEqual([-50, 50]);
+    const centered = zoomAt(box, box, 4);
+    expect(centered).toEqual({ x: -25, y: -25, size: 50 });
+    expect(centered.x + 0.5 * centered.size).toBe(0);
+  });
+
+  it("stops at the whole box and at the deepest zoom", () => {
+    expect(zoomAt({ x: -10, y: -10, size: 20 }, box, 0.01)).toEqual(box);
+    expect(zoomAt(box, box, 1000).size).toBeCloseTo(200 / 24);
+  });
+
+  it("pans within the box only", () => {
+    const view = { x: -50, y: -50, size: 100 };
+    expect(panBy(view, box, 0.25, 0)).toEqual({ x: -75, y: -50, size: 100 });
+    expect(panBy(view, box, 5, -5)).toEqual({ x: -100, y: 0, size: 100 });
+    expect(clampView({ x: 500, y: 500, size: 50 }, box)).toEqual({ x: 50, y: 50, size: 50 });
+  });
+});
+
+describe("bubbleLines", () => {
+  it("says more as a bubble grows on screen", () => {
+    expect(bubbleLines(5)).toEqual([]);
+    expect(bubbleLines(12)).toEqual(["rank"]);
+    expect(bubbleLines(30)).toEqual(["rank", "share"]);
+    expect(bubbleLines(45)).toEqual(["rank", "share", "address"]);
+    expect(bubbleLines(80)).toEqual(["rank", "share", "address", "balance"]);
   });
 });
