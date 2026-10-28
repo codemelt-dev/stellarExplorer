@@ -309,6 +309,7 @@ export function HolderMapCanvas({
                 pxPerUnit={pxPerUnit}
                 code={code}
                 onEnter={() => pointers.current.size === 0 && onActive(n.holder)}
+                onLeave={() => onActive(null)}
                 onOpen={() => open(n.holder)}
               />
             ))}
@@ -391,6 +392,7 @@ function Bubble({
   pxPerUnit,
   code,
   onEnter,
+  onLeave,
   onOpen,
 }: {
   node: PlacedHolder;
@@ -400,6 +402,7 @@ function Bubble({
   pxPerUnit: number;
   code: string;
   onEnter: () => void;
+  onLeave: () => void;
   onOpen: () => void;
 }) {
   const contract = node.holder.startsWith("C");
@@ -419,7 +422,9 @@ function Bubble({
       data-holder={node.holder}
       className="cursor-pointer transition-opacity duration-150"
       opacity={faded ? 0.35 : 1}
+      // a tap keeps its details open until the next tap, a mouse only while over the bubble
       onPointerEnter={(e) => e.pointerType !== "touch" && onEnter()}
+      onPointerLeave={(e) => e.pointerType !== "touch" && onLeave()}
       onClick={onOpen}
     >
       <circle
