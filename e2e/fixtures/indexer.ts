@@ -62,4 +62,14 @@ export const indexedXlmHolders = [
 // the two top holders moved XLM between each other, so they form one cluster
 export const indexedXlmHolderLinks = [{ a: ACCOUNT, b: ISSUER, transfers: "3" }];
 
+// 10M XLM against 2M Circle USDC prices XLM at $0.20
+export const PRICE_USDC = "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
+export const indexedXlmUsdcPool = {
+  pool_id: "a468d41d8e9b8f3c7209651608b74b7db7ac9952dcae0cdf24871d1d9c7b0088",
+  asset_a: "native",
+  asset_b: PRICE_USDC,
+  reserve_a: "100000000000000",
+  reserve_b: "20000000000000",
+};
+
 export const MISSING_INDEXED_ASSET_CODE = "ZZZ";

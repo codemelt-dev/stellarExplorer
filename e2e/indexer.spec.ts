@@ -84,6 +84,10 @@ test("mainnet XLM summary and holder ranking use indexer data", async ({
     main.getByRole("heading", { name: "Top holders" }),
   ).toBeVisible();
   await expect(main.getByText("12,500,000 XLM", { exact: true })).toBeVisible();
+  await expect(main.getByText("$0.200", { exact: true })).toBeVisible();
+  await expect(
+    main.getByText("from the XLM / USDC pool of 10.0M XLM", { exact: true }),
+  ).toBeVisible();
 
   await expect(main.getByRole("heading", { name: "Holder map" })).toBeVisible();
   await expect(

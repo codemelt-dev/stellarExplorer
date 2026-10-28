@@ -3,11 +3,12 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { Asset, Horizon, Networks } from "@stellar/stellar-sdk";
 import { horizon } from "./horizon";
-import { getXlmMarket } from "./market";
 import { fetchTomlOrgInfo } from "./toml";
 import { NotFoundError } from "./transactions";
 import { assetKey, fromAssetKey, type AssetIdentity } from "./assetId";
 import { indexerActive, indexerRead, withIndexer } from "./indexer/client";
+import { indexedPricePools } from "./indexer/prices";
+import { buildPriceBook, orderBookPrice } from "./prices";
 import {
   indexedAsset,
   indexedAssets,
@@ -178,7 +179,7 @@ export interface TopToken {
   identity: Extract<AssetIdentity, { kind: "issued" }>;
   org: string;
   image: string | null;
-  /** From the order book against XLM, times the XLM price. */
+  /** From our pools, else the order book against XLM; XLM from the XLM / USDC pool. */
   priceUsd: number | null;
   /** Distinct senders over the last 7 days. */
   senders: number;
@@ -208,13 +209,22 @@ async function loadTopTokens(): Promise<TopToken[]> {
     .sort((a, b) => b.senders - a.senders)
     .slice(0, TOP_TOKENS);
 
-  const [tomls, xlm, prices] = await Promise.all([
+  if (!ranked.length) return [];
+
+  const [tomls, book] = await Promise.all([
     Promise.all(ranked.map((a) => fetchTomlOrgInfo(a.homeDomain))),
-    getXlmMarket(),
-    Promise.all(ranked.map((a) => indexedXlmPrice(`${a.code}:${a.issuer}`).catch(() => null))),
+    indexedPricePools().then(buildPriceBook),
   ]);
+  const prices = await Promise.all(
+    ranked.map(async (a) => {
+      const key = `${a.code}:${a.issuer}`;
+      const pooled = book.assets.get(key);
+      if (pooled) return pooled.usd;
+      const mid = await indexedXlmPrice(key).catch(() => null);
+      return mid === null ? null : orderBookPrice(book, mid).usd;
+    }),
+  );
   return ranked.map((a, i) => {
-    const price = prices[i];
     const toml = tomls[i];
     // big issuers don't always serve a toml (circle.com doesn't), the home domain stands in
     return {
@@ -222,7 +232,7 @@ async function loadTopTokens(): Promise<TopToken[]> {
       org: toml?.orgName ?? a.homeDomain,
       image:
         toml?.currencies.find((c) => c.code === a.code && c.issuer === a.issuer)?.image ?? null,
-      priceUsd: price !== null && xlm ? price * xlm.priceUsd : null,
+      priceUsd: prices[i],
       senders: a.senders,
       dailySenders: a.dailySenders,
       holders: a.holders,

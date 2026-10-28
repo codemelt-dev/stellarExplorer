@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Coins, Globe, PieChart, SearchX, Users } from "lucide-react";
+import { Coins, DollarSign, Globe, PieChart, SearchX, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,7 +29,8 @@ import { getContractSummary } from "@/lib/stellar/contracts";
 import { activeNetwork } from "@/lib/stellar/network";
 import { fetchTomlOrgInfo } from "@/lib/stellar/toml";
 import { NotFoundError } from "@/lib/stellar/transactions";
-import { compactNumber } from "@/lib/format";
+import { compactNumber, formatPrice } from "@/lib/format";
+import { getAssetPrice, type AssetPrice } from "@/lib/stellar/pricing";
 
 export async function generateMetadata({
   params,
@@ -48,6 +49,28 @@ async function quiet<T>(work: Promise<T>): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+function xlmAmount(n: number): string {
+  if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  if (n >= 1) return n.toLocaleString("en-US", { maximumFractionDigits: 4 });
+  return n.toPrecision(4);
+}
+
+function priceValue(price: AssetPrice | null, code: string): string {
+  if (!price) return "–";
+  if (price.usd !== null) return formatPrice(price.usd);
+  return code === "XLM" ? "–" : `${xlmAmount(price.xlm)} XLM`;
+}
+
+function priceCaption(price: AssetPrice | null, native: boolean, netLabel: string): string {
+  if (!price) return netLabel === "mainnet" ? "no pool or order book prices it" : "mainnet only";
+  const depth = price.depthXlm === null ? "" : `${compactNumber(price.depthXlm)} XLM`;
+  if (native) return `from the XLM / USDC pool of ${depth}`;
+  const xlm = `${xlmAmount(price.xlm)} XLM`;
+  if (price.source === "xlm pool") return `${xlm} in a pool of ${depth}`;
+  if (price.source === "usdc pool") return `${xlm}, from a USDC pool of ${depth}`;
+  return `${xlm}, order book mid`;
 }
 
 function percent(part: bigint, whole: bigint): number | null {
@@ -100,10 +123,11 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
   }
 
   const contractId = assetContractId(identity, network.passphrase);
-  const [holders, issuer, contract] = await Promise.all([
+  const [holders, issuer, contract, price] = await Promise.all([
     getTopHolders(identity),
     identity.kind === "issued" ? quiet(getAccount(identity.issuer)) : null,
     contractId ? quiet(getContractSummary(contractId)) : null,
+    getAssetPrice(identity),
   ]);
   const toml = issuer?.home_domain ? await fetchTomlOrgInfo(issuer.home_domain) : null;
 
@@ -152,7 +176,14 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile
+          label="Price"
+          info="From our own liquidity pools: the deepest pool against XLM (or Circle USDC), with XLM priced from the XLM / USDC pool. Pools holding under 1,000 XLM aren't used; without one, the order book's mid price."
+          value={priceValue(price, identity.code)}
+          caption={priceCaption(price, identity.kind === "native", netLabel)}
+          icon={DollarSign}
+        />
         <StatTile
           label="Holders"
           info="Accounts that hold this asset."

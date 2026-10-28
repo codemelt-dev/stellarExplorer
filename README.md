@@ -56,7 +56,8 @@ The humanizer covers all 27 operation types (24 classic, plus `invoke_host_funct
 | Live ledger pulse | indexer, polled every second through `/api/ledgers/live`; Horizon SSE fallback | Horizon SSE |
 | Live operations feed | indexer, polled every 20 seconds through `/api/operations/live`; Horizon SSE fallback | Horizon SSE |
 | Network growth, account totals | indexer; stellar.expert fallback | same (always mainnet figures) |
-| Top tokens | indexer: 7-day senders, holders, order book price; XLM price from CoinGecko | same (always mainnet) |
+| Top tokens | indexer: 7-day senders, holders, price from our pools (order book mid as fallback), XLM from the XLM / USDC pool | same (always mainnet) |
+| Asset price | indexer: deepest pool against XLM or Circle USDC (pools under 1,000 XLM skipped), order book mid as fallback; XLM from the XLM / USDC pool | not shown |
 | XLM price and market stats | CoinGecko | same |
 | TVL, protocols, DEX volume and trades | DefiLlama, Horizon | same (always mainnet) |
 | Issuer names and icons | SEP-1 `stellar.toml` from the issuer's home domain | same |

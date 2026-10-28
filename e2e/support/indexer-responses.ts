@@ -12,6 +12,7 @@ import {
   indexedXlm,
   indexedXlmHolderLinks,
   indexedXlmHolders,
+  indexedXlmUsdcPool,
 } from "../fixtures/indexer";
 
 export type RequestHeaders = Record<string, string | string[] | undefined>;
@@ -150,6 +151,20 @@ function apiResponse(url: URL, method: string, headers: RequestHeaders) {
       throw new Error("Contract instance request has an unexpected projection");
     }
     return { status: 200, body: [] } satisfies FixtureResponse;
+  }
+
+  if (url.pathname === "/liquidity_pools") {
+    if (url.searchParams.get("select") !== "pool_id,asset_a,asset_b,reserve_a,reserve_b") {
+      throw new Error("Price-pool request has an unexpected projection");
+    }
+    // the price book asks for XLM pools, then Circle USDC pools
+    if (url.searchParams.get("asset_a") === "eq.native") {
+      return { status: 200, body: [indexedXlmUsdcPool] } satisfies FixtureResponse;
+    }
+    if (url.searchParams.get("or")?.includes("USDC:")) {
+      return { status: 200, body: [] } satisfies FixtureResponse;
+    }
+    throw new Error(`Unexpected price-pool query: ${url.search}`);
   }
 
   if (url.pathname === "/ledgers") {
