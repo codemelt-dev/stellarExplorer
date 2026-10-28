@@ -84,8 +84,11 @@ export function PagedList({
   className,
   hasMore = false,
   onLastPage,
+  header,
 }: {
   children: ReactNode;
+  /** Column headings, shown above the rows and below the page controls. */
+  header?: ReactNode;
   anchorPrefix?: string;
   /** Scrolled back to when a page is picked from the bottom bar. */
   topId?: string;
@@ -173,6 +176,7 @@ export function PagedList({
         </div>
       )}
       <div className={className}>
+        {header}
         {anchorPrefix
           ? rows.map((row, i) => (
               <div key={i} hidden={i < start || i >= end}>

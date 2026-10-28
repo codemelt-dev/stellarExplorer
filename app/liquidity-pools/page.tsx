@@ -1,18 +1,10 @@
 import type { Metadata } from "next";
 import { Droplets } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { ClickableRow } from "@/components/stellar/ClickableRow";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
-import { listHeadClass } from "@/components/layout/listTable";
+import { PagedList } from "@/components/layout/PagedList";
 import { PoolPair } from "@/components/pool/PoolPair";
 import { indexerActive } from "@/lib/stellar/indexer/client";
 import { activeNetwork } from "@/lib/stellar/network";
@@ -22,6 +14,10 @@ import { compactUsd } from "@/lib/format";
 export const metadata: Metadata = { title: "Liquidity pools · Stellar Explorer" };
 
 const usd = (n: number | null) => (n === null ? "–" : n < 1 ? "<$1" : compactUsd(n));
+
+// fees and LP accounts drop out on narrow screens
+const poolGrid =
+  "grid grid-cols-[2rem_minmax(0,1fr)_5rem_5rem] items-center gap-x-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_6rem_6rem_5rem] md:grid-cols-[2.5rem_minmax(0,1fr)_7rem_7rem_6rem_7rem]";
 
 export default async function LiquidityPoolsPage() {
   const [pools, active, network] = await Promise.all([getTopPools(), indexerActive(), activeNetwork()]);
@@ -52,53 +48,53 @@ export default async function LiquidityPoolsPage() {
         </p>
       </div>
 
-      <Card className="gap-0 p-0">
+      <Card id="pools" className="scroll-mt-24 gap-3 p-5 py-4">
         {pools.length === 0 ? (
           <EmptyState message="No pools could be valued right now." />
         ) : (
-          <Table>
-            <TableHeader className={listHeadClass}>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-12 pl-4">#</TableHead>
-                <TableHead>Pool</TableHead>
-                <TableHead className="text-right">TVL</TableHead>
-                <TableHead className="text-right">Volume 24h</TableHead>
-                <TableHead className="hidden text-right sm:table-cell">Fees 24h</TableHead>
-                <TableHead className="hidden pr-4 text-right md:table-cell">LP accounts</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pools.map((pool, i) => (
-                <ClickableRow
-                  key={pool.id}
-                  href={`/pool/${pool.id}`}
-                  label="Open pool"
-                  className="border-b border-border last:border-b-0"
-                >
-                  <TableCell className="pl-4 text-dim tabular-nums">{i + 1}</TableCell>
-                  <TableCell className="max-w-0 sm:max-w-none">
-                    <PoolPair a={pool.a.identity} b={pool.b.identity} />
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm tabular-nums">
-                    {usd(pool.tvlUsd)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm tabular-nums">
-                    {pool.trades24h ? usd(pool.volume24hUsd) : <span className="text-dim">–</span>}
-                  </TableCell>
-                  <TableCell className="hidden text-right font-mono text-sm tabular-nums sm:table-cell">
-                    {pool.trades24h && pool.volume24hUsd !== null ? (
-                      usd((pool.volume24hUsd * pool.feeBp) / 10_000)
-                    ) : (
-                      <span className="text-dim">–</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="hidden pr-4 text-right tabular-nums md:table-cell">
-                    {pool.accounts.toLocaleString("en-US")}
-                  </TableCell>
-                </ClickableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <PagedList
+            topId="pools"
+            className="flex flex-col"
+            header={
+              <div
+                className={`${poolGrid} border-b border-border pb-2 text-xs font-medium uppercase tracking-wider text-dim`}
+              >
+                <span>#</span>
+                <span>Pool</span>
+                <span className="text-right">TVL</span>
+                <span className="text-right">Vol 24h</span>
+                <span className="hidden text-right sm:block">Fees 24h</span>
+                <span className="hidden text-right md:block">LP accounts</span>
+              </div>
+            }
+          >
+            {pools.map((pool, i) => (
+              <ClickableRow
+                key={pool.id}
+                as="div"
+                href={`/pool/${pool.id}`}
+                label="Open pool"
+                className={`${poolGrid} h-12 border-b border-border text-sm last:border-b-0`}
+              >
+                <span className="text-dim tabular-nums">{i + 1}</span>
+                <PoolPair a={pool.a.identity} b={pool.b.identity} />
+                <span className="text-right font-mono tabular-nums">{usd(pool.tvlUsd)}</span>
+                <span className="text-right font-mono tabular-nums">
+                  {pool.trades24h ? usd(pool.volume24hUsd) : <span className="text-dim">–</span>}
+                </span>
+                <span className="hidden text-right font-mono tabular-nums sm:block">
+                  {pool.trades24h && pool.volume24hUsd !== null ? (
+                    usd((pool.volume24hUsd * pool.feeBp) / 10_000)
+                  ) : (
+                    <span className="text-dim">–</span>
+                  )}
+                </span>
+                <span className="hidden text-right tabular-nums md:block">
+                  {pool.accounts.toLocaleString("en-US")}
+                </span>
+              </ClickableRow>
+            ))}
+          </PagedList>
         )}
       </Card>
       <p className="text-xs text-dim">
