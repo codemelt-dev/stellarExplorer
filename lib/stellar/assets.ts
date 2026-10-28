@@ -11,11 +11,13 @@ import { indexerActive, indexerRead, withIndexer } from "./indexer/client";
 import {
   indexedAsset,
   indexedAssets,
+  indexedHolderLinks,
   indexedListedAssets,
   indexedTokenActivity,
   indexedTopHolders,
   indexedXlmPrice,
   type IndexedHolder,
+  type IndexedHolderLink,
 } from "./indexer/assets";
 
 export type AssetRecord = Horizon.ServerApi.AssetRecord;
@@ -154,6 +156,23 @@ export const getTopHolders = cache(
   (identity: AssetIdentity, limit = 100): Promise<IndexedHolder[] | null> =>
     indexerRead("top holders", () => indexedTopHolders(assetKey(identity), limit)),
 );
+
+export type { IndexedHolderLink as HolderLink };
+
+/** How far back transfers between top holders count as a link. */
+export const HOLDER_LINK_DAYS = 90;
+
+// a few seconds on the busiest assets, and the ranking only changes daily
+const cachedHolderLinks = unstable_cache(
+  (asset: string, holders: string[]) => indexedHolderLinks(asset, holders, HOLDER_LINK_DAYS),
+  ["holder-links"],
+  { revalidate: 3600 },
+);
+
+/** Which of the given holders moved the asset between each other. Indexer only, null when off or failed. */
+export function getHolderLinks(identity: AssetIdentity, holders: string[]): Promise<IndexedHolderLink[] | null> {
+  return indexerRead("holder links", () => cachedHolderLinks(assetKey(identity), holders));
+}
 
 export interface TopToken {
   identity: Extract<AssetIdentity, { kind: "issued" }>;

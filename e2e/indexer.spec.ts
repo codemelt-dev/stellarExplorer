@@ -84,6 +84,15 @@ test("mainnet XLM summary and holder ranking use indexer data", async ({
     main.getByRole("heading", { name: "Top holders" }),
   ).toBeVisible();
   await expect(main.getByText("12,500,000 XLM", { exact: true })).toBeVisible();
+
+  await expect(main.getByRole("heading", { name: "Holder map" })).toBeVisible();
+  await expect(
+    main.getByRole("img", { name: "Top 2 holders of XLM as bubbles sized by their share of the supply" }),
+  ).toBeVisible();
+  await expect(
+    main.getByText(/Lines join holders that moved XLM between each other in the last 90 days/),
+  ).toBeVisible();
+  await expect(main.getByText(/1 cluster holds 40\.00% of the supply/)).toBeVisible();
 });
 
 test("an unindexed mainnet asset falls back to Horizon's missing-record result", async ({

@@ -33,7 +33,7 @@ One exception to that path: on testnet, or when the indexer fails, the browser s
 | Transactions | `/tx/[hash]`, `/transactions` | success or failure with the decoded reason, every operation as a sentence, Soroban arguments, return values and events, balance changes, fee bumps, raw XDR per operation; the list filters by operation type |
 | Accounts | `/account/[id]` | balances, issuer names from stellar.toml, filterable history, signers, thresholds, flags, sponsorship, data entries; muxed (`M…`) addresses resolve to their base account |
 | Contracts | `/contract/[id]`, `/contracts` | WASM hash and TTL, the interface parsed from the contract spec, events, decoded storage, WASM download, Stellar Asset Contract detection; a directory of active and all contracts |
-| Assets | `/asset/[id]`, `/assets` | supply, holders and top holders; a ranked asset directory |
+| Assets | `/asset/[id]`, `/assets` | supply, holders, a holder map (top 100 as bubbles by share of supply, clustered by transfers between them in the last 90 days) and top holders; a ranked asset directory |
 | Ledgers | `/ledger/[sequence]`, `/ledgers` | close metadata, transactions, previous and next ledger |
 | DeFi | `/defi/[slug]` | per-protocol TVL and volume; recent trades on the Stellar DEX page |
 | Search | `/search` | `G`/`M`/`C` addresses, transaction hashes, ledger numbers, asset codes and federation addresses (`name*domain`, resolved in the browser through the domain's `stellar.toml`) |
@@ -49,7 +49,7 @@ The humanizer covers all 27 operation types (24 classic, plus `invoke_host_funct
 | Ledgers, recent transactions | indexer (ClickHouse); Horizon fallback | Horizon |
 | Contracts: summary, storage, interface, events, WASM | indexer (ClickHouse and PostgREST); RPC fallback. Events go back to go-live, 100 at a time: older batches load through `/api/contracts/[id]/events` when the last page is reached | Stellar RPC (recent events only) |
 | Asset supply and holder count | indexer; Horizon fallback | Horizon |
-| Top holders, asset and contract directories | indexer only | not available |
+| Top holders, holder map links, asset and contract directories | indexer only | not available |
 | Accounts: balances, signers, flags, data entries | indexer (PostgREST); Horizon fallback | Horizon |
 | Account history and "Your activity" | indexer (ClickHouse) through `/api/accounts/[id]/activity` for the latter; Horizon for history before 6 October 2026 and as fallback | Horizon |
 | Transaction detail: operations, contract calls, return values, events, balance changes | indexer (ClickHouse); Horizon, with RPC and the AWS ledger archive for Soroban results, for transactions before 6 October 2026 and as fallback | Horizon, with RPC for Soroban results |

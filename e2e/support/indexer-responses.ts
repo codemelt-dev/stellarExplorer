@@ -10,6 +10,7 @@ import {
   indexedLedger,
   indexedLedgerTransaction,
   indexedXlm,
+  indexedXlmHolderLinks,
   indexedXlmHolders,
 } from "../fixtures/indexer";
 
@@ -101,6 +102,14 @@ function clickhouseResponse(
       throw new Error("Top-holder request has unexpected parameters");
     }
     rows = indexedXlmHolders;
+  } else if (body.includes("FROM transfers_by_account")) {
+    if (
+      url.searchParams.get("param_asset") !== "native" ||
+      url.searchParams.get("param_days") !== "90"
+    ) {
+      throw new Error("Holder-link request has unexpected parameters");
+    }
+    rows = indexedXlmHolderLinks;
   } else if (
     body.includes("FROM state_copy_runs") ||
     body.includes("FROM daily_stats") ||

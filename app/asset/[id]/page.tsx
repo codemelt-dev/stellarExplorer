@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Coins, Globe, PieChart, SearchX, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { HolderBubbleMap } from "@/components/asset/HolderBubbleMap";
 import { Address } from "@/components/stellar/Address";
 import { Amount } from "@/components/stellar/Amount";
 import { Identicon } from "@/components/stellar/Identicon";
@@ -14,9 +17,12 @@ import { getAccount } from "@/lib/stellar/accounts";
 import {
   assetContractId,
   getAsset,
+  getHolderLinks,
   getTopHolders,
+  HOLDER_LINK_DAYS,
   type AssetHolder,
 } from "@/lib/stellar/assets";
+import type { MapHolder } from "@/lib/stellar/holderMap";
 import { parseAssetId, type AssetIdentity } from "@/lib/stellar/assetId";
 import { formatAmount, stroopsToLumens } from "@/lib/stellar/amount";
 import { getContractSummary } from "@/lib/stellar/contracts";
@@ -177,6 +183,17 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
         </Card>
       )}
 
+      {holders && holders.length > 1 && (
+        <section id="holder-map" className="flex scroll-mt-24 flex-col gap-3">
+          <h2 className="text-lg font-semibold">Holder map</h2>
+          <Card className="p-4 sm:p-5">
+            <Suspense fallback={<HolderMapSkeleton />}>
+              <HolderMap identity={identity} holders={holders} supply={supply} />
+            </Suspense>
+          </Card>
+        </section>
+      )}
+
       <section id="holders" className="flex scroll-mt-24 flex-col gap-3">
         <h2 className="text-lg font-semibold">Top holders</h2>
         <Card className="gap-3 p-5">
@@ -205,6 +222,40 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
           )}
         </Card>
       </section>
+    </div>
+  );
+}
+
+// waits on the transfers between holders, a few seconds on the busiest assets
+async function HolderMap({
+  identity,
+  holders,
+  supply,
+}: {
+  identity: AssetIdentity & { kind: "native" | "issued" };
+  holders: AssetHolder[];
+  supply: bigint;
+}) {
+  const shown = holders.slice(0, 100);
+  const links = await getHolderLinks(identity, shown.map((h) => h.holder));
+  const issuer = identity.kind === "issued" ? identity.issuer : null;
+  const mapHolders: MapHolder[] = shown.map((h) => ({
+    rank: h.rank,
+    holder: h.holder,
+    balance: h.balance,
+    share: percent(BigInt(h.balance), supply),
+    label: h.holder === issuer ? "issuer" : h.holder.startsWith("C") ? "contract" : undefined,
+  }));
+  return (
+    <HolderBubbleMap holders={mapHolders} links={links} code={identity.code} days={HOLDER_LINK_DAYS} />
+  );
+}
+
+function HolderMapSkeleton() {
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
+      <Skeleton className="aspect-square w-full rounded-lg" />
+      <Skeleton className="h-[26rem] w-full rounded-lg lg:h-auto" />
     </div>
   );
 }

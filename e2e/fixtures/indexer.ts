@@ -59,4 +59,7 @@ export const indexedXlmHolders = [
   { rank: 2, holder: ISSUER, balance: "75000000000000" },
 ];
 
+// the two top holders moved XLM between each other, so they form one cluster
+export const indexedXlmHolderLinks = [{ a: ACCOUNT, b: ISSUER, transfers: "3" }];
+
 export const MISSING_INDEXED_ASSET_CODE = "ZZZ";
