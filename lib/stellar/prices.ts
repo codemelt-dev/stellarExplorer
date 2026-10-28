@@ -114,3 +114,48 @@ export function orderBookPrice(book: PriceBook, xlm: number): AssetPrice {
     depthXlm: null,
   };
 }
+
+/** An asset priced from a pool at least this deep can value other pools. */
+export const ANCHOR_DEPTH_XLM = 100_000;
+
+// how far a side can be trusted to value a pool: XLM, then Circle USDC, then
+// deeply priced assets by depth; 0 is not at all
+function trust(book: PriceBook, asset: string): number {
+  const price = book.assets.get(asset);
+  if (!price || price.source === "order book") return 0;
+  if (asset === "native") return Infinity;
+  if (asset === USDC) return Number.MAX_VALUE;
+  return (price.depthXlm ?? 0) >= ANCHOR_DEPTH_XLM ? price.depthXlm! : 0;
+}
+
+export interface SideValue {
+  xlm: number;
+  usd: number | null;
+  /** The asset it was valued by. */
+  by: string;
+}
+
+/**
+ * The value of two amounts that are worth the same, as both sides of a
+ * constant product pool are at its own price (or both legs of a trade): the
+ * more trusted side counted twice, or once with `twice` off. Null when
+ * neither side can be trusted, which keeps junk pools from pricing themselves.
+ */
+export function valueBySide(
+  book: PriceBook,
+  a: { asset: string; amount: number },
+  b: { asset: string; amount: number },
+  twice = true,
+): SideValue | null {
+  const side = trust(book, a.asset) >= trust(book, b.asset) ? a : b;
+  if (!trust(book, side.asset)) return null;
+  const xlm = (twice ? 2 : 1) * side.amount * book.assets.get(side.asset)!.xlm;
+  return { xlm, usd: book.xlmUsd === null ? null : xlm * book.xlmUsd, by: side.asset };
+}
+
+/** The assets trusted to value pools, with their XLM prices. */
+export function anchorAssets(book: PriceBook): Array<{ asset: string; xlm: number }> {
+  return [...book.assets.entries()]
+    .filter(([asset]) => trust(book, asset) > 0)
+    .map(([asset, price]) => ({ asset, xlm: price.xlm }));
+}

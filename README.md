@@ -33,12 +33,13 @@ One exception to that path: on testnet, or when the indexer fails, the browser s
 | Transactions | `/tx/[hash]`, `/transactions` | success or failure with the decoded reason, every operation as a sentence, Soroban arguments, return values and events, balance changes, fee bumps, raw XDR per operation; the list filters by operation type |
 | Accounts | `/account/[id]` | balances, issuer names from stellar.toml, filterable history, signers, thresholds, flags, sponsorship, data entries; muxed (`M…`) addresses resolve to their base account |
 | Contracts | `/contract/[id]`, `/contracts` | WASM hash and TTL, the interface parsed from the contract spec, events, decoded storage, WASM download, Stellar Asset Contract detection; a directory of active and all contracts |
-| Assets | `/asset/[id]`, `/assets` | supply, holders, a holder map (top 100 as bubbles by share of supply, clustered by transfers between them in the last 90 days) and top holders; a ranked asset directory |
+| Liquidity pools | `/liquidity-pools`, `/pool/[id]` | top 100 classic AMM pools by value locked; a pool page with reserves, TVL, 24h volume and fees, LP accounts, daily volume and the latest trades, deposits and withdrawals. `L…` pool addresses link here and are searchable |
+| Assets | `/asset/[id]`, `/assets` | supply, holders, price, a holder map (top 100 as bubbles by share of supply, clustered by transfers between them in the last 90 days) and top holders; a ranked asset directory |
 | Ledgers | `/ledger/[sequence]`, `/ledgers` | close metadata, transactions, previous and next ledger |
 | DeFi | `/defi/[slug]` | per-protocol TVL and volume; recent trades on the Stellar DEX page |
 | Search | `/search` | `G`/`M`/`C` addresses, transaction hashes, ledger numbers, asset codes and federation addresses (`name*domain`, resolved in the browser through the domain's `stellar.toml`) |
 
-The site opens on mainnet. The header switches to testnet and back, and connects a wallet read-only (Freighter, xBull). Analytics and liquidity pools are placeholder pages until the indexer's full history lands.
+The site opens on mainnet. The header switches to testnet and back, and connects a wallet read-only (Freighter, xBull). Analytics is a placeholder page until the indexer's full history lands.
 
 The humanizer covers all 27 operation types (24 classic, plus `invoke_host_function`, `extend_footprint_ttl` and `restore_footprint`), with a safe fallback for anything unknown. Amounts stay `bigint` from the wire to the screen; no stroop math runs in floating point.
 
@@ -57,6 +58,7 @@ The humanizer covers all 27 operation types (24 classic, plus `invoke_host_funct
 | Live operations feed | indexer, polled every 20 seconds through `/api/operations/live`; Horizon SSE fallback | Horizon SSE |
 | Network growth, account totals | indexer; stellar.expert fallback | same (always mainnet figures) |
 | Top tokens | indexer: 7-day senders, holders, price from our pools (order book mid as fallback), XLM from the XLM / USDC pool | same (always mainnet) |
+| Liquidity pools | indexer only: live reserves (API), ranking from the daily copy (ClickHouse), trades from the pool's transfers. Valued by the XLM, USDC or deeply priced side (an asset priced from a pool of at least 100,000 XLM), twice; volume counts each trade once | not available |
 | Asset price | indexer: deepest pool against XLM or Circle USDC (pools under 1,000 XLM skipped), order book mid as fallback; XLM from the XLM / USDC pool | not shown |
 | XLM price and market stats | CoinGecko | same |
 | TVL, protocols, DEX volume and trades | DefiLlama, Horizon | same (always mainnet) |

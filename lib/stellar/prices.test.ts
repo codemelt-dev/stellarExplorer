@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { MIN_DEPTH_XLM, USDC, buildPriceBook, orderBookPrice, type PricePool } from "./prices";
+import {
+  MIN_DEPTH_XLM,
+  USDC,
+  buildPriceBook,
+  orderBookPrice,
+  valueBySide,
+  type PricePool,
+} from "./prices";
 
 const AQUA = "AQUA:GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA";
 const EURC = "EURC:GDHU6WRG4IEQXM5NZ4BMPKOXHW76MZM4Y2IEMFDVXBSDP6SJY4ITNPP2";
@@ -69,5 +76,38 @@ describe("orderBookPrice", () => {
     const price = orderBookPrice(book, 2);
     expect(price).toMatchObject({ xlm: 2, source: "order book", poolId: null, depthXlm: null });
     expect(price.usd).toBeCloseTo(2 * book.xlmUsd!, 9);
+  });
+});
+
+describe("valueBySide", () => {
+  const LGSC = "LGSC:GAJ4DUVTCJKVFW2SBGRLOX5S3J5XP5BWA6DWDLYRLL45F5G7LBDO2SMP";
+  const book = buildPriceBook([
+    XLM_USDC,
+    pool("aqua", "native", 500_000, AQUA, 1_000_000),
+    pool("lgsc", "native", 1_500, LGSC, 1),
+  ]);
+
+  it("values a pool by its XLM side, twice", () => {
+    const value = valueBySide(book, { asset: "native", amount: 1_000 }, { asset: AQUA, amount: 2_000 })!;
+    expect(value).toMatchObject({ xlm: 2_000, by: "native" });
+    expect(value.usd).toBeCloseTo(2_000 * book.xlmUsd!, 9);
+  });
+
+  it("prefers USDC over other assets, and a deep asset over nothing", () => {
+    expect(valueBySide(book, { asset: AQUA, amount: 10 }, { asset: USDC, amount: 1 })!.by).toBe(USDC);
+    expect(valueBySide(book, { asset: AQUA, amount: 10 }, { asset: EURC, amount: 1 })).toMatchObject({
+      xlm: 10,
+      by: AQUA,
+    });
+  });
+
+  it("won't let a thinly priced token value a pool", () => {
+    // LGSC is priced at 1,500 XLM from a 1,500 XLM pool; a million of it is not 1.5B XLM
+    expect(book.assets.get(LGSC)?.xlm).toBe(1_500);
+    expect(valueBySide(book, { asset: LGSC, amount: 1_000_000 }, { asset: EURC, amount: 5 })).toBeNull();
+  });
+
+  it("counts one side once for a trade", () => {
+    expect(valueBySide(book, { asset: "native", amount: 100 }, { asset: AQUA, amount: 200 }, false)!.xlm).toBe(100);
   });
 });

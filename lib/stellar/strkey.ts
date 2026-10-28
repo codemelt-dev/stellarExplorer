@@ -18,12 +18,13 @@ export function base32Decode(input: string): Uint8Array {
   return new Uint8Array(out);
 }
 
-export type AddressKind = "account" | "muxedAccount" | "contract" | "unknown";
+export type AddressKind = "account" | "muxedAccount" | "contract" | "liquidityPool" | "unknown";
 
 export function addressKind(address: string): AddressKind {
   if (address.length === 56 && address.startsWith("G")) return "account";
   if (address.length === 69 && address.startsWith("M")) return "muxedAccount";
   if (address.length === 56 && address.startsWith("C")) return "contract";
+  if (address.length === 56 && address.startsWith("L")) return "liquidityPool";
   return "unknown";
 }
 

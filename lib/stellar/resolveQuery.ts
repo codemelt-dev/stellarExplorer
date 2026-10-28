@@ -2,6 +2,7 @@ export type ResolvedQuery =
   | { type: "account"; id: string }
   | { type: "muxedAccount"; id: string }
   | { type: "contract"; id: string }
+  | { type: "liquidityPool"; id: string }
   | { type: "transaction"; hash: string }
   | { type: "ledger"; sequence: number }
   | { type: "federation"; address: string }
@@ -29,6 +30,7 @@ export function resolveQuery(raw: string): ResolvedQuery {
   if (isStrKey(q, "G", 56)) return { type: "account", id: q };
   if (isStrKey(q, "M", 69)) return { type: "muxedAccount", id: q };
   if (isStrKey(q, "C", 56)) return { type: "contract", id: q };
+  if (isStrKey(q, "L", 56)) return { type: "liquidityPool", id: q };
 
   if (HEX64.test(q)) return { type: "transaction", hash: q.toLowerCase() };
 
@@ -64,6 +66,8 @@ export function routeFor(resolved: ResolvedQuery): string | null {
       return `/account/${resolved.id}`;
     case "contract":
       return `/contract/${resolved.id}`;
+    case "liquidityPool":
+      return `/pool/${resolved.id}`;
     case "transaction":
       return `/tx/${resolved.hash}`;
     case "ledger":
