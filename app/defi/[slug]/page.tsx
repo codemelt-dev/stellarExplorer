@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SearchX, Globe, ArrowLeft, Landmark, BarChart3, CalendarDays, CalendarRange } from "lucide-react";
+import { SearchX, Globe, ArrowLeft, Landmark, BarChart3, CalendarDays, CalendarRange, Boxes, Coins, Droplets, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/states/EmptyState";
@@ -17,9 +17,11 @@ import {
   getProtocolVolume,
   PROTOCOLS,
 } from "@/lib/stellar/defi";
-import { getProtocolActivity } from "@/lib/stellar/pools";
+import { getProtocolActivity, getProtocolTotals } from "@/lib/stellar/pools";
 import type { SorobanProtocol } from "@/lib/stellar/sorobanAmm";
-import { compactUsd } from "@/lib/format";
+import { compactUsd, percentGap } from "@/lib/format";
+
+const usd = (n: number) => (n === 0 ? "$0" : n < 1 ? "<$1" : compactUsd(n));
 
 export async function generateMetadata({
   params,
@@ -53,11 +55,12 @@ export default async function ProtocolPage({
 }) {
   const { slug } = await params;
   const indexed = INDEXED[slug];
-  const [detail, volume, trades, onchain] = await Promise.all([
+  const [detail, volume, trades, onchain, totals] = await Promise.all([
     getProtocolDetail(slug),
     getProtocolVolume(slug),
     HAS_TRADES.has(slug) ? getDexTrades() : Promise.resolve(null),
     indexed ? getProtocolActivity(indexed) : Promise.resolve(null),
+    indexed ? getProtocolTotals() : Promise.resolve(null),
   ]);
 
   if (!detail) {
@@ -71,12 +74,13 @@ export default async function ProtocolPage({
   }
 
   const change = volume?.change1d ?? null;
+  const ours = totals?.find((t) => t.protocol === indexed) ?? null;
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
-          href="/#defi"
+          href="/defi"
           className="inline-flex w-fit items-center gap-1.5 text-sm text-dim transition-colors duration-150 hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" aria-hidden="true" />
@@ -176,6 +180,60 @@ export default async function ProtocolPage({
           />
         </Card>
       </div>
+
+      {indexed && (
+        <Card className="gap-3 p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-base font-semibold">From our index</h2>
+            <span className="text-xs text-dim">
+              Live from the {detail.name} pools we can value.{" "}
+              <Link href="/defi" className="text-gold hover:underline underline-offset-4">
+                Compare every protocol
+              </Link>
+            </span>
+          </div>
+          {ours && ours.pools > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatTile
+                label="Value locked"
+                info="Both sides of every pool we can value, at prices from our own pools."
+                icon={Droplets}
+                value={usd(ours.tvlUsd)}
+                caption={detail.currentTvl ? `${percentGap(ours.tvlUsd, detail.currentTvl)} vs DefiLlama` : `${ours.pools} pools`}
+              />
+              <StatTile
+                label="Volume 24h"
+                info="Trades through those pools over the last 17,280 ledgers (about a day), valued at today's prices."
+                icon={TrendingUp}
+                value={usd(ours.volume24hUsd)}
+                caption={volume?.total24h ? `${percentGap(ours.volume24hUsd, volume.total24h)} vs DefiLlama` : `${ours.trades24h.toLocaleString("en-US")} trades`}
+              />
+              <StatTile
+                label="Fees 24h"
+                info="Each pool's volume times its fee. Pools whose fee we haven't read yet count as none."
+                icon={Coins}
+                value={usd(ours.fees24hUsd)}
+                caption="paid by traders to the pools"
+              />
+              <StatTile
+                label="Pools"
+                info="Pools with a side we can price and confirm is really held."
+                icon={Boxes}
+                value={ours.pools.toLocaleString("en-US")}
+                caption={`${ours.trades24h.toLocaleString("en-US")} trades in 24h`}
+              />
+            </div>
+          ) : (
+            <EmptyState
+              message={
+                totals
+                  ? `None of the ${detail.name} pools we found could be valued right now.`
+                  : `Couldn't load ${detail.name} totals from the indexer. They'll be back on the next refresh.`
+              }
+            />
+          )}
+        </Card>
+      )}
 
       {/* on-chain activity */}
       <Card id="activity" className="scroll-mt-24 gap-0 p-0">

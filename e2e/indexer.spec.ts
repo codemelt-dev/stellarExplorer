@@ -155,6 +155,26 @@ test("a classic pool page opens from its L address", async ({ page }) => {
   await expect(main.getByText("400.0K pool shares", { exact: true })).toBeVisible();
 });
 
+test("the DeFi overview adds up our pools by protocol next to DefiLlama", async ({
+  page,
+}) => {
+  await page.goto("/defi");
+  const main = page.getByRole("main");
+
+  await expect(main.getByRole("heading", { name: "DeFi on Stellar" })).toBeVisible();
+  await expect(main.getByText("$4.4M", { exact: true })).toBeVisible();
+  await expect(main.getByText("2 pools", { exact: true })).toBeVisible();
+  await expect(main.getByText("3 trades", { exact: true })).toBeVisible();
+
+  const classic = main.getByRole("link", { name: "Open Stellar AMM", exact: true });
+  await expect(classic).toContainText("$4.0M");
+  await expect(classic).toContainText("not listed");
+  await expect(classic).toContainText("$200");
+  await expect(main.getByRole("link", { name: "Open Soroswap", exact: true })).toContainText("$400.0K");
+  await expect(main.getByRole("link", { name: "Open Blend", exact: true })).toContainText("not indexed yet");
+  await expect(main.getByText(/Couldn't reach DefiLlama, so its columns are empty/)).toBeVisible();
+});
+
 test("an unindexed mainnet asset falls back to Horizon's missing-record result", async ({
   page,
 }) => {

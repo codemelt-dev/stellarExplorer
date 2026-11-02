@@ -42,6 +42,8 @@ import {
 
 const LEDGERS_PER_DAY = 17_280;
 const TOP_POOLS = 100;
+// classic pools counted in the protocol totals: the top 500 hold about 99% of the value
+const CLASSIC_POOLS = 500;
 const ACTIVITY = 50;
 const DAYS = 30;
 // contracts to check for Soroban pools, by what they hold
@@ -346,42 +348,84 @@ async function liveSorobanPools(book: PriceBook): Promise<{ pools: PoolSummary[]
   return { pools, infos };
 }
 
-async function loadTopPools(): Promise<PoolSummary[]> {
+/** One protocol's pools we can value, added up. */
+export interface ProtocolTotals {
+  protocol: PoolProtocol;
+  pools: number;
+  tvlUsd: number;
+  volume24hUsd: number;
+  fees24hUsd: number;
+  trades24h: number;
+}
+
+function totalsOf(pools: PoolSummary[], protocols: PoolProtocol[]): ProtocolTotals[] {
+  return protocols.map((protocol) => {
+    const mine = pools.filter((p) => p.protocol === protocol);
+    const sum = (value: (p: PoolSummary) => number | null) => mine.reduce((s, p) => s + (value(p) ?? 0), 0);
+    return {
+      protocol,
+      pools: mine.length,
+      tvlUsd: sum((p) => p.tvlUsd),
+      volume24hUsd: sum((p) => p.volume24hUsd),
+      fees24hUsd: sum((p) => p.fees24hUsd),
+      trades24h: sum((p) => p.trades24h),
+    };
+  });
+}
+
+async function loadPools(): Promise<{ top: PoolSummary[]; totals: ProtocolTotals[] }> {
   const book = buildPriceBook(await indexedPricePools());
-  const ids = await indexedPoolCandidates(anchorAssets(book), TOP_POOLS + 50);
+  const ids = await indexedPoolCandidates(anchorAssets(book), CLASSIC_POOLS);
   const [classic, soroban] = await Promise.all([
     indexedLivePools(ids).then((rows) => rows.map((pool) => summarize(book, pool))),
     // a Soroban outage shouldn't take the classic pools down with it
     liveSorobanPools(book).catch((error) => {
       console.warn("[indexer] soroban pools: failed", error instanceof Error ? error.message : error);
-      return { pools: [], infos: [] };
+      return null;
     }),
   ]);
-  const ranked = [...classic, ...soroban.pools]
+  const valued = [...classic, ...(soroban?.pools ?? [])]
     .filter((pool) => pool.tvlXlm !== null)
-    .sort((x, y) => y.tvlXlm! - x.tvlXlm!)
-    .slice(0, TOP_POOLS);
+    .sort((x, y) => y.tvlXlm! - x.tvlXlm!);
   const isSoroban = (p: PoolSummary) => p.protocol !== "classic";
-  const shown = new Set(ranked.filter(isSoroban).map((p) => p.id));
+  const priced = new Set(valued.filter(isSoroban).map((p) => p.id));
   const [classicTrades, sorobanTrades] = await Promise.all([
     indexedPoolTrades(
-      ranked.filter((p) => !isSoroban(p)).map((p) => p.address),
+      valued.filter((p) => !isSoroban(p)).map((p) => p.address),
       LEDGERS_PER_DAY,
     ),
     indexedPoolTrades(
-      [...shown],
+      [...priced],
       LEDGERS_PER_DAY,
-      tokensByPool(soroban.infos.filter((i) => shown.has(i.id))),
+      tokensByPool((soroban?.infos ?? []).filter((i) => priced.has(i.id))),
     ),
   ]);
-  return ranked.map((pool) => withVolume(book, pool, isSoroban(pool) ? sorobanTrades : classicTrades));
+  const pools = valued.map((pool) => withVolume(book, pool, isSoroban(pool) ? sorobanTrades : classicTrades));
+  return {
+    top: pools.slice(0, TOP_POOLS),
+    // no Soroban totals at all beats totals of zero
+    totals: totalsOf(pools, soroban ? ["classic", "aquarius", "soroswap"] : ["classic"]),
+  };
 }
 
-const cachedTopPools = unstable_cache(loadTopPools, ["top-pools"], { revalidate: 120 });
+const cachedPools = unstable_cache(loadPools, ["pools"], { revalidate: 120 });
 
 /** The most valuable pools, classic and Soroban, live. Indexer only: null on testnet or when it failed. */
 export function getTopPools(): Promise<PoolSummary[] | null> {
-  return indexerRead("top pools", cachedTopPools);
+  return indexerRead("top pools", async () => (await cachedPools()).top);
+}
+
+/**
+ * Value locked and 24h trading per protocol, from every pool we can value.
+ * Mainnet facts shown on every network; null when the indexer is off or failed.
+ */
+export function getProtocolTotals(): Promise<ProtocolTotals[] | null> {
+  return withIndexer<ProtocolTotals[] | null>(
+    "protocol totals",
+    async () => (await cachedPools()).totals,
+    async () => null,
+    { anyNetwork: true },
+  );
 }
 
 type ChPoolOp = Awaited<ReturnType<typeof indexedPoolActivity>>[number];
