@@ -156,6 +156,8 @@ export async function indexedPoolDailyTrades(pool: string, days: number, tokens?
 }
 
 export interface ChPoolOp {
+  /** The pool's L or C address. */
+  pool: string;
   ledger_sequence: number;
   tx_index: number;
   op_index: number;
@@ -193,11 +195,58 @@ export async function indexedPoolActivity(pool: string, limit: number, tokens?: 
      ORDER BY ledger_sequence DESC, tx_index DESC, op_index DESC LIMIT {limit:UInt32}`,
     { pool, limit, scan: limit * 4, ...(tokens && { tokens: list(tokens) }) },
   );
-  const ops = rows.map(({ op_time, op_counterparty, ...r }) => ({
-    ...r,
-    closed_at: op_time,
-    counterparty: op_counterparty,
-  }));
+  return withHashes(
+    rows.map(({ op_time, op_counterparty, ...r }) => ({
+      ...r,
+      pool,
+      closed_at: op_time,
+      counterparty: op_counterparty,
+    })),
+  );
+}
+
+/**
+ * The latest operations across many Soroban pools over the last `ledgers`
+ * ledgers, newest first, each pool with its token contracts.
+ */
+export async function indexedPoolsActivity(
+  tokens: Record<string, string[]>,
+  ledgers: number,
+  limit: number,
+): Promise<ChPoolOp[]> {
+  const pools = Object.keys(tokens);
+  if (!pools.length) return [];
+  const window = "ledger_sequence > (SELECT max(sequence) FROM ledgers) - {ledgers:UInt32}";
+  const rows = await chQuery<{
+    op_pool: string;
+    ledger_sequence: number;
+    tx_index: number;
+    op_index: number;
+    op_time: string;
+    op_counterparty: string;
+    legs: Array<[string, string]>;
+  }>(
+    `SELECT account AS op_pool, ledger_sequence, tx_index, op_index, any(closed_at) AS op_time,
+            any(counterparty) AS op_counterparty, groupArray((${KEY}, toString(amount))) AS legs
+     FROM transfers_by_account
+     WHERE account IN {pools:Array(String)} AND kind = 'transfer' AND ${window}
+       AND (account, contract_id) IN {legs:Array(Tuple(String, String))}
+       ${noRewards("{pools:Array(String)}", window)}
+     GROUP BY account, ledger_sequence, tx_index, op_index
+     ORDER BY ledger_sequence DESC, tx_index DESC, op_index DESC LIMIT {limit:UInt32}`,
+    { pools: list(pools), legs: legsOf(tokens), ledgers, limit },
+  );
+  return withHashes(
+    rows.map(({ op_pool, op_time, op_counterparty, ...r }) => ({
+      ...r,
+      pool: op_pool,
+      closed_at: op_time,
+      counterparty: op_counterparty,
+    })),
+  );
+}
+
+async function withHashes(ops: Array<Omit<ChPoolOp, "tx_hash">>): Promise<ChPoolOp[]> {
   if (!ops.length) return [];
   const hashes = await chQuery<{ ledger_sequence: number; tx_index: number; tx_hash: string }>(
     `SELECT ledger_sequence, tx_index, lower(hex(hash)) AS tx_hash FROM transactions

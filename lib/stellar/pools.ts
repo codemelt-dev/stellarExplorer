@@ -4,7 +4,7 @@ import { unstable_cache } from "next/cache";
 import { StrKey } from "@stellar/stellar-sdk";
 import { stroopsToLumens } from "./amount";
 import { fromAssetKey, type AssetIdentity } from "./assetId";
-import { indexerRead } from "./indexer/client";
+import { indexerRead, withIndexer } from "./indexer/client";
 import { indexedPricePools } from "./indexer/prices";
 import {
   indexedLivePools,
@@ -13,6 +13,7 @@ import {
   indexedPoolCandidates,
   indexedPoolDailyTrades,
   indexedPoolTrades,
+  indexedPoolsActivity,
   type ChPool,
   type ChPoolTrades,
 } from "./indexer/pools";
@@ -105,6 +106,11 @@ export interface PoolActivity {
   /** Into the pool for a trade's first leg and every deposit leg. */
   /** Amounts are exact decimal strings. */
   legs: Array<{ identity: AssetIdentity; amount: string; into: boolean }>;
+}
+
+export interface ProtocolActivity extends PoolActivity {
+  /** The pool it happened in. */
+  pool: { id: string; a: AssetIdentity; b: AssetIdentity };
 }
 
 export interface PoolDetail extends PoolSummary {
@@ -455,3 +461,33 @@ export const getPool = cache(
       return poolDetail(book, summarize(book, pool));
     }),
 );
+
+// three days covers even a quiet protocol's latest few dozen operations
+const PROTOCOL_ACTIVITY_LEDGERS = 3 * LEDGERS_PER_DAY;
+
+/**
+ * The latest trades, deposits and withdrawals across a Soroban protocol's
+ * pools we track, and how many pools that is. Mainnet facts shown on every
+ * network; null when the indexer is off or failed.
+ */
+export function getProtocolActivity(
+  protocol: SorobanProtocol,
+): Promise<{ pools: number; activity: ProtocolActivity[] } | null> {
+  return withIndexer<{ pools: number; activity: ProtocolActivity[] } | null>(
+    `${protocol} activity`,
+    async () => {
+      const infos = (await cachedSorobanList()).filter((i) => i.protocol === protocol);
+      const byAddress = new Map(infos.map((i) => [i.id, i]));
+      const ops = await indexedPoolsActivity(tokensByPool(infos), PROTOCOL_ACTIVITY_LEDGERS, ACTIVITY);
+      const activity = ops.flatMap((op) => {
+        const read = activityOf(op);
+        const info = byAddress.get(op.pool);
+        if (!read || !info) return [];
+        return [{ ...read, pool: { id: info.id, a: identityOf(info.keys[0]), b: identityOf(info.keys[1]) } }];
+      });
+      return { pools: infos.length, activity };
+    },
+    async () => null,
+    { anyNetwork: true },
+  );
+}

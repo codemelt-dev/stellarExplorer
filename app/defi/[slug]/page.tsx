@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/states/EmptyState";
 import { ProtocolIcon } from "@/components/defi/ProtocolIcon";
 import { ProtocolCharts } from "@/components/defi/ProtocolCharts";
 import { DexTrades } from "@/components/defi/DexTrades";
+import { PagedList } from "@/components/layout/PagedList";
+import { PoolActivityRow } from "@/components/pool/PoolActivityRow";
 import { DefiMenu } from "@/components/layout/DefiMenu";
 import { StatTile } from "@/components/stats/StatTile";
 import {
@@ -15,6 +17,8 @@ import {
   getProtocolVolume,
   PROTOCOLS,
 } from "@/lib/stellar/defi";
+import { getProtocolActivity } from "@/lib/stellar/pools";
+import type { SorobanProtocol } from "@/lib/stellar/sorobanAmm";
 import { compactUsd } from "@/lib/format";
 
 export async function generateMetadata({
@@ -34,9 +38,13 @@ export function generateStaticParams() {
   return PROTOCOLS.map((p) => ({ slug: p.slug }));
 }
 
-// classic DEX trades come from Horizon. Soroban protocols need contract
-// lists + a mainnet RPC first, so they get an honest empty state for now
+// classic DEX trades come from Horizon; the Soroban AMMs we index read
+// their pools' activity from our own indexer
 const HAS_TRADES = new Set(["stellar-dex"]);
+const INDEXED: Record<string, SorobanProtocol> = {
+  "aquarius-stellar": "aquarius",
+  soroswap: "soroswap",
+};
 
 export default async function ProtocolPage({
   params,
@@ -44,10 +52,12 @@ export default async function ProtocolPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [detail, volume, trades] = await Promise.all([
+  const indexed = INDEXED[slug];
+  const [detail, volume, trades, onchain] = await Promise.all([
     getProtocolDetail(slug),
     getProtocolVolume(slug),
     HAS_TRADES.has(slug) ? getDexTrades() : Promise.resolve(null),
+    indexed ? getProtocolActivity(indexed) : Promise.resolve(null),
   ]);
 
   if (!detail) {
@@ -168,19 +178,40 @@ export default async function ProtocolPage({
       </div>
 
       {/* on-chain activity */}
-      <Card className="gap-0 p-0">
+      <Card id="activity" className="scroll-mt-24 gap-0 p-0">
         <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-5 pb-3">
           <h2 className="text-base font-semibold">
-            {HAS_TRADES.has(slug) ? "Latest trades" : "On-chain activity"}
+            {HAS_TRADES.has(slug) ? "Latest trades" : indexed ? "Latest activity" : "On-chain activity"}
           </h2>
           {HAS_TRADES.has(slug) && (
             <span className="text-xs text-dim">Orderbook and AMM pool fills, refreshed every minute</span>
           )}
+          {indexed && onchain && (
+            <span className="text-xs text-dim">
+              Swaps, deposits and withdrawals across the {onchain.pools} {detail.name} pools we track, from our
+              indexer.{" "}
+              <Link href={`/liquidity-pools?type=${indexed}`} className="text-gold hover:underline underline-offset-4">
+                See the pools
+              </Link>
+            </span>
+          )}
         </div>
         {HAS_TRADES.has(slug) ? (
           <DexTrades trades={trades} />
+        ) : !indexed ? (
+          <EmptyState message={`${detail.name} activity isn't read from our indexer yet. The numbers above come from DefiLlama.`} />
+        ) : !onchain ? (
+          <EmptyState message={`Couldn't load ${detail.name} activity from the indexer. It'll be back on the next refresh.`} />
+        ) : onchain.activity.length === 0 ? (
+          <EmptyState message={`No swaps, deposits or withdrawals in the ${detail.name} pools we track over the last 3 days.`} />
         ) : (
-          <EmptyState message={`Live ${detail.name} activity needs its contract addresses plus a mainnet RPC endpoint. That's next on the roadmap; the numbers above come from public data today.`} />
+          <div className="px-5 pb-4">
+            <PagedList topId="activity" className="flex flex-col">
+              {onchain.activity.map((a, i) => (
+                <PoolActivityRow key={`${a.txHash}-${a.pool.id}-${i}`} activity={a} pool={a.pool} />
+              ))}
+            </PagedList>
+          </div>
         )}
       </Card>
     </div>

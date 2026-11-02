@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  ArrowDownToLine,
-  ArrowLeftRight,
-  ArrowUpFromLine,
   Boxes,
   Coins,
   Droplets,
@@ -17,17 +14,17 @@ import { Address } from "@/components/stellar/Address";
 import { Amount } from "@/components/stellar/Amount";
 import { AssetLabel } from "@/components/stellar/AssetLabel";
 import { CopyButton } from "@/components/stellar/CopyButton";
-import { Time } from "@/components/stellar/Time";
 import { StatTile } from "@/components/stats/StatTile";
 import { PagedList } from "@/components/layout/PagedList";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
 import { VolumeChart } from "@/components/defi/VolumeChart";
 import { PROTOCOL_LABEL, PoolPair, assetCodeOf } from "@/components/pool/PoolPair";
+import { PoolActivityRow } from "@/components/pool/PoolActivityRow";
 import { assetKey, type AssetIdentity } from "@/lib/stellar/assetId";
 import { indexerActive } from "@/lib/stellar/indexer/client";
 import { activeNetwork } from "@/lib/stellar/network";
-import { getPool, poolIdOf, type PoolActivity, type PoolDetail, type PoolKind } from "@/lib/stellar/pools";
+import { getPool, poolIdOf, type PoolDetail, type PoolKind } from "@/lib/stellar/pools";
 import { truncateKey } from "@/lib/stellar/strkey";
 import { compactNumber, compactUsd } from "@/lib/format";
 
@@ -255,7 +252,7 @@ export default async function PoolPage({ params }: { params: Promise<{ id: strin
           {pool.activity.length ? (
             <PagedList topId="activity" className="flex flex-col">
               {pool.activity.map((a, i) => (
-                <ActivityRow key={`${a.txHash}-${i}`} activity={a} />
+                <PoolActivityRow key={`${a.txHash}-${i}`} activity={a} />
               ))}
             </PagedList>
           ) : (
@@ -299,43 +296,3 @@ function price(n: number): string {
   if (n >= 1) return n.toLocaleString("en-US", { maximumFractionDigits: 4 });
   return n.toPrecision(4);
 }
-
-const KIND = {
-  trade: { icon: ArrowLeftRight, verb: "Swapped", join: "for" },
-  deposit: { icon: ArrowDownToLine, verb: "Deposited", join: "and" },
-  withdraw: { icon: ArrowUpFromLine, verb: "Withdrew", join: "and" },
-} as const;
-
-function ActivityRow({ activity }: { activity: PoolActivity }) {
-  const { icon: Icon, verb, join } = KIND[activity.kind];
-  return (
-    <div className="flex flex-col gap-1.5 border-b border-border py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
-        <Icon className="size-4 shrink-0 text-dim" aria-hidden="true" />
-        <span className="text-dim">{verb}</span>
-        {activity.legs.map((leg, i) => (
-          <span key={i} className="inline-flex items-center gap-1.5">
-            {i > 0 && <span className="text-dim">{join}</span>}
-            <Amount
-              amount={leg.amount}
-              assetCode={assetCodeOf(leg.identity)}
-              assetIssuer={issuerOf(leg.identity)}
-              maxDecimals={4}
-            />
-          </span>
-        ))}
-      </div>
-      <div className="flex shrink-0 items-center gap-3 text-sm">
-        <Address address={activity.account} copy={false} />
-        {activity.txHash ? (
-          <Link href={`/tx/${activity.txHash}`} className="rounded-sm" aria-label="View transaction">
-            <Time iso={activity.createdAt} className="hover:text-foreground" />
-          </Link>
-        ) : (
-          <Time iso={activity.createdAt} />
-        )}
-      </div>
-    </div>
-  );
-}
-

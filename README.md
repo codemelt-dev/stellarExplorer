@@ -36,7 +36,7 @@ One exception to that path: on testnet, or when the indexer fails, the browser s
 | Liquidity pools | `/liquidity-pools`, `/pool/[id]` | top 100 pools by value locked across Stellar's classic AMM, Soroswap and Aquarius, with a tab per protocol; a pool page with reserves, price, TVL, 24h volume and fees, LP accounts (classic) or pool type (Soroban), daily volume and the latest trades, deposits and withdrawals. `L…` pool addresses link here and are searchable; a Soroban pool opens at `/pool/C…` |
 | Assets | `/asset/[id]`, `/assets` | supply, holders, price, a holder map (top 100 as bubbles by share of supply, clustered by transfers between them in the last 90 days) and top holders; a ranked asset directory |
 | Ledgers | `/ledger/[sequence]`, `/ledgers` | close metadata, transactions, previous and next ledger |
-| DeFi | `/defi/[slug]` | per-protocol TVL and volume; recent trades on the Stellar DEX page |
+| DeFi | `/defi/[slug]` | per-protocol TVL and volume; recent trades on the Stellar DEX page; on Aquarius and Soroswap, the latest swaps, deposits and withdrawals across their pools, from our indexer |
 | Search | `/search` | `G`/`M`/`C` addresses, transaction hashes, ledger numbers, asset codes and federation addresses (`name*domain`, resolved in the browser through the domain's `stellar.toml`) |
 
 The site opens on mainnet. The header switches to testnet and back, and connects a wallet read-only (Freighter, xBull). Analytics is a placeholder page until the indexer's full history lands.
