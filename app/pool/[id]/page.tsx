@@ -4,6 +4,7 @@ import {
   ArrowDownToLine,
   ArrowLeftRight,
   ArrowUpFromLine,
+  Boxes,
   Coins,
   Droplets,
   SearchX,
@@ -22,11 +23,11 @@ import { PagedList } from "@/components/layout/PagedList";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
 import { VolumeChart } from "@/components/defi/VolumeChart";
-import { PoolPair, assetCodeOf } from "@/components/pool/PoolPair";
+import { PROTOCOL_LABEL, PoolPair, assetCodeOf } from "@/components/pool/PoolPair";
 import { assetKey, type AssetIdentity } from "@/lib/stellar/assetId";
 import { indexerActive } from "@/lib/stellar/indexer/client";
 import { activeNetwork } from "@/lib/stellar/network";
-import { getPool, poolIdOf, type PoolActivity } from "@/lib/stellar/pools";
+import { getPool, poolIdOf, type PoolActivity, type PoolDetail, type PoolKind } from "@/lib/stellar/pools";
 import { truncateKey } from "@/lib/stellar/strkey";
 import { compactNumber, compactUsd } from "@/lib/format";
 
@@ -55,7 +56,7 @@ export default async function PoolPage({ params }: { params: Promise<{ id: strin
     return (
       <EmptyState
         icon={SearchX}
-        message={`"${decodeURIComponent(id).slice(0, 70)}" isn't a pool id. Pools are a 64-character hex id or an L… address.`}
+        message={`"${decodeURIComponent(id).slice(0, 70)}" isn't a pool id. Pools are a 64-character hex id or an L… address, Soroban pools a C… contract address.`}
         className="py-24"
       />
     );
@@ -66,8 +67,19 @@ export default async function PoolPage({ params }: { params: Promise<{ id: strin
     return (
       <EmptyState
         icon={SearchX}
-        message="No liquidity pool with this id on mainnet. It may never have existed, or every share was withdrawn and it was removed."
+        message={
+          poolId.startsWith("C")
+            ? "This contract isn't a Soroswap or Aquarius pool that traded in the last 30 days. Open it as a contract instead."
+            : "No liquidity pool with this id on mainnet. It may never have existed, or every share was withdrawn and it was removed."
+        }
         className="py-24"
+        action={
+          poolId.startsWith("C") && (
+            <Link href={`/contract/${poolId}`} className="rounded-sm text-sm text-gold hover:underline">
+              Open the contract
+            </Link>
+          )
+        }
       />
     );
   }
@@ -88,9 +100,10 @@ export default async function PoolPage({ params }: { params: Promise<{ id: strin
 
   const codeA = assetCodeOf(pool.a.identity);
   const codeB = assetCodeOf(pool.b.identity);
-  const fee = `${(pool.feeBp / 100).toFixed(2)}%`;
+  const fee = pool.feeBp === null ? null : `${(pool.feeBp / 100).toFixed(2)}%`;
   const valuedBy =
     pool.valuedBy === assetKey(pool.a.identity) ? codeA : pool.valuedBy === assetKey(pool.b.identity) ? codeB : null;
+  const soroban = pool.protocol !== "classic";
 
   return (
     <div className="flex flex-col gap-6">
@@ -109,29 +122,43 @@ export default async function PoolPage({ params }: { params: Promise<{ id: strin
             <PoolPair a={pool.a.identity} b={pool.b.identity} size={28} />
           </h1>
           <Badge variant="outline" className="font-mono text-[11px] text-dim">
-            constant product, {fee} fee
+            {kindOf(pool, fee)}
           </Badge>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-dim">
-          <span className="inline-flex items-center gap-1.5">
-            Pool id
-            <span className="font-mono text-foreground" title={pool.id}>
-              {truncateKey(pool.id, 8)}
+          {soroban ? (
+            <span className="inline-flex items-center gap-1.5">
+              Contract <Address address={pool.address} chars={6} />
             </span>
-            <CopyButton value={pool.id} label="Copy pool id" />
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            Address <Address address={pool.address} chars={6} link={false} />
-          </span>
+          ) : (
+            <>
+              <span className="inline-flex items-center gap-1.5">
+                Pool id
+                <span className="font-mono text-foreground" title={pool.id}>
+                  {truncateKey(pool.id, 8)}
+                </span>
+                <CopyButton value={pool.id} label="Copy pool id" />
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                Address <Address address={pool.address} chars={6} link={false} />
+              </span>
+            </>
+          )}
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
           label="TVL"
-          info="Value locked: both sides of a pool are worth the same at its own price, so twice its XLM, USDC or deeply priced side, at prices from our own pools."
+          info={tvlInfo(pool)}
           value={usd(pool.tvlUsd)}
-          caption={valuedBy ? `valued by its ${valuedBy} side` : "neither side has a reliable price"}
+          caption={
+            valuedBy
+              ? `valued by its ${valuedBy} side`
+              : soroban
+                ? "no side we can price and confirm"
+                : "neither side has a reliable price"
+          }
           icon={Droplets}
         />
         <StatTile
@@ -143,18 +170,34 @@ export default async function PoolPage({ params }: { params: Promise<{ id: strin
         />
         <StatTile
           label="Fees 24h"
-          info={`Every trade pays the pool ${fee}, which stays in the reserves and accrues to share holders.`}
-          value={pool.trades24h && pool.volume24hUsd !== null ? usd((pool.volume24hUsd * pool.feeBp) / 10_000) : "$0"}
-          caption={`${fee} of volume, to liquidity providers`}
+          info={
+            fee === null
+              ? "Aquarius sets a fee per pool. This one hasn't had a trade to read it from in the last 30 days."
+              : soroban
+                ? `Every trade pays the pool ${fee}.`
+                : `Every trade pays the pool ${fee}, which stays in the reserves and accrues to share holders.`
+          }
+          value={fee === null ? "–" : pool.trades24h ? usd(pool.fees24hUsd) : "$0"}
+          caption={fee === null ? "fee not known yet" : soroban ? `${fee} of volume` : `${fee} of volume, to liquidity providers`}
           icon={Coins}
         />
-        <StatTile
-          label="LP accounts"
-          info="Accounts with a trustline to the pool's shares."
-          value={pool.accounts.toLocaleString("en-US")}
-          caption={`${compactNumber(pool.shares)} pool shares`}
-          icon={Users}
-        />
+        {pool.accounts !== null && pool.shares !== null ? (
+          <StatTile
+            label="LP accounts"
+            info="Accounts with a trustline to the pool's shares."
+            value={pool.accounts.toLocaleString("en-US")}
+            caption={`${compactNumber(pool.shares)} pool shares`}
+            icon={Users}
+          />
+        ) : (
+          <StatTile
+            label="Protocol"
+            info="A Soroban contract. Its reserves come from its own events, its trades and liquidity from the token transfers it made."
+            value={PROTOCOL_LABEL[pool.protocol]}
+            caption={pool.kind ? `${KIND_LABEL[pool.kind]} pool` : "pool contract"}
+            icon={Boxes}
+          />
+        )}
       </div>
 
       <section className="flex flex-col gap-3">
@@ -178,10 +221,14 @@ export default async function PoolPage({ params }: { params: Promise<{ id: strin
               </span>
             </div>
           ))}
-          <p className="py-3 font-mono text-xs text-dim">
-            1 {codeA} = {price(pool.b.amount / pool.a.amount)} {codeB}
-            <span aria-hidden="true"> · </span>1 {codeB} = {price(pool.a.amount / pool.b.amount)} {codeA}
-          </p>
+          {pool.price !== null && pool.price > 0 && (
+            <p className="py-3 font-mono text-xs text-dim">
+              1 {codeA} = {price(pool.price)} {codeB}
+              <span aria-hidden="true"> · </span>1 {codeB} = {price(1 / pool.price)} {codeA}
+              {pool.kind === "concentrated" && <span className="font-sans"> at the pool&apos;s current tick</span>}
+              {pool.kind === "stable" && <span className="font-sans"> at its latest trade</span>}
+            </p>
+          )}
         </Card>
       </section>
 
@@ -218,6 +265,32 @@ export default async function PoolPage({ params }: { params: Promise<{ id: strin
       </section>
     </div>
   );
+}
+
+const KIND_LABEL: Record<PoolKind, string> = {
+  constant_product: "constant product",
+  stable: "stable",
+  concentrated: "concentrated liquidity",
+};
+
+function kindOf(pool: PoolDetail, fee: string | null): string {
+  return [
+    pool.protocol === "classic" ? null : PROTOCOL_LABEL[pool.protocol],
+    pool.kind && KIND_LABEL[pool.kind],
+    fee && `${fee} fee`,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function tvlInfo(pool: PoolDetail): string {
+  if (pool.protocol === "classic") {
+    return "Value locked: both sides of a pool are worth the same at its own price, so twice its XLM, USDC or deeply priced side, at prices from our own pools.";
+  }
+  const held = " That side has to be held for real in the latest daily balances, not just claimed in events.";
+  return pool.kind === "concentrated" || pool.kind === "stable"
+    ? `Value locked from the pool's latest reserves: its XLM, USDC or deeply priced side at prices from our own pools, the other side at the pool's own price but never above the first.${held}`
+    : `Value locked from the pool's latest reserves: twice its XLM, USDC or deeply priced side, at prices from our own pools.${held}`;
 }
 
 function price(n: number): string {

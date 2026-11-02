@@ -1,10 +1,12 @@
 import { test, expect } from "./support/test";
 import {
+  CLASSIC_POOL_ADDRESS,
   INDEXED_LEDGER,
   INDEXED_LEDGER_HASH,
   INDEXED_TX_HASH,
   INDEXER_UNAVAILABLE_LEDGER,
   MISSING_INDEXED_ASSET_CODE,
+  SOROSWAP_PAIR,
 } from "./fixtures/indexer";
 import { ISSUER, ledgerRecord, transactions, TX } from "./fixtures/stellar";
 
@@ -97,6 +99,60 @@ test("mainnet XLM summary and holder ranking use indexer data", async ({
     main.getByText(/Lines join holders that moved XLM between each other in the last 90 days/),
   ).toBeVisible();
   await expect(main.getByText(/1 cluster holds 40\.00% of the supply/)).toBeVisible();
+});
+
+test("liquidity pools rank classic and Soroswap pools by value from the indexer", async ({
+  page,
+}) => {
+  await page.goto("/liquidity-pools");
+  const main = page.getByRole("main");
+  const rows = main.getByRole("link", { name: "Open pool" });
+
+  await expect(main.getByRole("heading", { name: "Liquidity pools" })).toBeVisible();
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("$4.0M");
+  await expect(rows.nth(0)).toContainText("$200");
+  await expect(rows.nth(0)).toContainText("Stellar AMM");
+  await expect(rows.nth(1)).toContainText("$400.0K");
+  await expect(rows.nth(1)).toContainText("Soroswap");
+
+  await main
+    .getByRole("navigation", { name: "Pool protocol" })
+    .getByRole("link", { name: "Soroswap" })
+    .click();
+  await expect(page).toHaveURL(/\?type=soroswap$/);
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("$400.0K");
+  await expect(main.getByText(/1 of the top 2 by value\./)).toBeVisible();
+});
+
+test("a Soroswap pool page reads its reserves from the pair's events", async ({
+  page,
+}) => {
+  await page.goto(`/pool/${SOROSWAP_PAIR}`);
+  const main = page.getByRole("main");
+
+  await expect(
+    main.getByText("Soroswap, constant product, 0.30% fee", { exact: true }),
+  ).toBeVisible();
+  await expect(main.getByText("$400.0K", { exact: true })).toBeVisible();
+  await expect(main.getByText("valued by its XLM side", { exact: true })).toBeVisible();
+  await expect(main.getByText("constant product pool", { exact: true })).toBeVisible();
+  await expect(
+    main.getByText("No trades through this pool in the last 30 days."),
+  ).toBeVisible();
+});
+
+test("a classic pool page opens from its L address", async ({ page }) => {
+  await page.goto(`/pool/${CLASSIC_POOL_ADDRESS}`);
+  const main = page.getByRole("main");
+
+  await expect(main.getByText("constant product, 0.30% fee", { exact: true })).toBeVisible();
+  await expect(main.getByText("$4.0M", { exact: true })).toBeVisible();
+  await expect(main.getByText("$200", { exact: true })).toBeVisible();
+  await expect(main.getByText("3 trades", { exact: true })).toBeVisible();
+  await expect(main.getByText("832", { exact: true })).toBeVisible();
+  await expect(main.getByText("400.0K pool shares", { exact: true })).toBeVisible();
 });
 
 test("an unindexed mainnet asset falls back to Horizon's missing-record result", async ({

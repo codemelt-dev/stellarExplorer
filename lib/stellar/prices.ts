@@ -153,6 +153,34 @@ export function valueBySide(
   return { xlm, usd: book.xlmUsd === null ? null : xlm * book.xlmUsd, by: side.asset };
 }
 
+/**
+ * The value of a concentrated pool, whose sides needn't be worth the same:
+ * the trusted side at its price, the other at the pool's own price
+ * (`bPerA`, B per A) but never above the trusted side. Both trusted, both
+ * at their prices. Null when neither side can be trusted.
+ */
+export function valueByHoldings(
+  book: PriceBook,
+  a: { asset: string; amount: number },
+  b: { asset: string; amount: number },
+  bPerA: number,
+): SideValue | null {
+  const xlmOf = (side: { asset: string; amount: number }) => side.amount * book.assets.get(side.asset)!.xlm;
+  const aFirst = trust(book, a.asset) >= trust(book, b.asset);
+  const [side, other] = aFirst ? [a, b] : [b, a];
+  if (!trust(book, side.asset)) return null;
+  const anchor = xlmOf(side);
+  let rest: number;
+  if (trust(book, other.asset)) rest = xlmOf(other);
+  else {
+    // the other side in units of the trusted one, at the pool's price
+    const inSide = aFirst ? other.amount / bPerA : other.amount * bPerA;
+    rest = Number.isFinite(inSide) ? Math.min(inSide * book.assets.get(side.asset)!.xlm, anchor) : 0;
+  }
+  const xlm = anchor + rest;
+  return { xlm, usd: book.xlmUsd === null ? null : xlm * book.xlmUsd, by: side.asset };
+}
+
 /** The assets trusted to value pools, with their XLM prices. */
 export function anchorAssets(book: PriceBook): Array<{ asset: string; xlm: number }> {
   return [...book.assets.entries()]

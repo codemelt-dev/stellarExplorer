@@ -5,6 +5,7 @@ import {
   buildPriceBook,
   orderBookPrice,
   valueBySide,
+  valueByHoldings,
   type PricePool,
 } from "./prices";
 
@@ -109,5 +110,35 @@ describe("valueBySide", () => {
 
   it("counts one side once for a trade", () => {
     expect(valueBySide(book, { asset: "native", amount: 100 }, { asset: AQUA, amount: 200 }, false)!.xlm).toBe(100);
+  });
+});
+
+describe("valueByHoldings", () => {
+  const LGSC = "LGSC:GAJ4DUVTCJKVFW2SBGRLOX5S3J5XP5BWA6DWDLYRLL45F5G7LBDO2SMP";
+  const book = buildPriceBook([
+    XLM_USDC,
+    pool("aqua", "native", 500_000, AQUA, 1_000_000),
+    pool("lgsc", "native", 1_500, LGSC, 1),
+  ]);
+
+  it("adds both sides at their prices when both are trusted", () => {
+    expect(
+      valueByHoldings(book, { asset: "native", amount: 1_000 }, { asset: AQUA, amount: 1_000 }, 1),
+    ).toMatchObject({ xlm: 1_500, by: "native" });
+  });
+
+  it("values the other side at the pool's price, never above the trusted side", () => {
+    // 1 LGSC = 200 XLM in this pool, so 0.005 LGSC per XLM
+    const xlmFirst = (lgsc: number) =>
+      valueByHoldings(book, { asset: "native", amount: 1_000 }, { asset: LGSC, amount: lgsc }, 0.005)!.xlm;
+    expect(xlmFirst(2)).toBeCloseTo(1_400, 9);
+    expect(xlmFirst(10)).toBe(2_000);
+    expect(xlmFirst(0)).toBe(1_000);
+    const lgscFirst = valueByHoldings(book, { asset: LGSC, amount: 2 }, { asset: "native", amount: 1_000 }, 200)!;
+    expect(lgscFirst).toMatchObject({ xlm: 1_400, by: "native" });
+  });
+
+  it("can't value a pool with no trusted side", () => {
+    expect(valueByHoldings(book, { asset: LGSC, amount: 5 }, { asset: EURC, amount: 5 }, 1)).toBeNull();
   });
 });

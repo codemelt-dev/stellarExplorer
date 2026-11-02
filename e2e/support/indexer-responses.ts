@@ -7,11 +7,19 @@ import {
   INDEXER_CLICKHOUSE,
   MAINNET_XLM_INSTANCE_KEY_HASH,
   MISSING_INDEXED_ASSET,
+  SOROSWAP_PAIR,
+  indexedAssetContracts,
+  indexedClassicPool,
+  indexedClassicPoolTrades,
   indexedLedger,
   indexedLedgerTransaction,
   indexedXlm,
   indexedXlmHolderLinks,
   indexedXlmHolders,
+  indexedSoroswapBalances,
+  indexedSoroswapPair,
+  indexedSoroswapReserves,
+  indexedSoroswapTokens,
   indexedXlmUsdcPool,
 } from "../fixtures/indexer";
 
@@ -103,6 +111,30 @@ function clickhouseResponse(
       throw new Error("Top-holder request has unexpected parameters");
     }
     rows = indexedXlmHolders;
+  } else if (body.includes("FROM state_liquidity_pools")) {
+    // classic pool shortlist
+    rows = [{ pool_id: indexedXlmUsdcPool.pool_id }];
+  } else if (body.includes("FROM state_sac_balances") && body.includes("startsWith(holder, 'C')")) {
+    // contracts holding trusted assets, checked for Soroban pool events
+    rows = [{ holder: SOROSWAP_PAIR }];
+  } else if (body.includes("FROM state_sac_balances") && body.includes("holder IN")) {
+    rows = [indexedSoroswapBalances];
+  } else if (body.includes("FROM state_asset_contracts")) {
+    rows = indexedAssetContracts;
+  } else if (body.includes("SELECT count() AS events FROM events")) {
+    rows = [{ events: "120" }];
+  } else if (body.includes("FROM events") && body.includes("HAVING soroswap")) {
+    rows = url.searchParams.get("param_ids")?.includes(SOROSWAP_PAIR) ? [indexedSoroswapPair] : [];
+  } else if (body.includes("FROM events") && body.includes("AS state")) {
+    rows = [indexedSoroswapReserves];
+  } else if (body.includes("FROM transfers_by_account") && body.includes("count() AS n")) {
+    rows = indexedSoroswapTokens;
+  } else if (body.includes("GROUP BY pool, asset_in, asset_out")) {
+    // the classic pool traded in the last day; the pair, asked with its tokens, didn't
+    rows = url.searchParams.has("param_legs") ? [] : indexedClassicPoolTrades;
+  } else if (body.includes("GROUP BY day, asset_in, asset_out") || body.includes("AS op_counterparty")) {
+    // no daily history or activity for either pool
+    rows = [];
   } else if (body.includes("FROM transfers_by_account")) {
     if (
       url.searchParams.get("param_asset") !== "native" ||
@@ -151,6 +183,19 @@ function apiResponse(url: URL, method: string, headers: RequestHeaders) {
       throw new Error("Contract instance request has an unexpected projection");
     }
     return { status: 200, body: [] } satisfies FixtureResponse;
+  }
+
+  if (
+    url.pathname === "/liquidity_pools" &&
+    url.searchParams.get("select") ===
+      "pool_id,asset_a,asset_b,fee_bp,reserve_a,reserve_b,total_shares,trustlines,last_modified_ledger"
+  ) {
+    // live state of the classic pools, by id
+    const id = url.searchParams.get("pool_id");
+    if (id !== `in.(${indexedXlmUsdcPool.pool_id})` && id !== `eq.${indexedXlmUsdcPool.pool_id}`) {
+      throw new Error(`Unexpected live-pool query: ${id ?? "missing"}`);
+    }
+    return { status: 200, body: [indexedClassicPool] } satisfies FixtureResponse;
   }
 
   if (url.pathname === "/liquidity_pools") {

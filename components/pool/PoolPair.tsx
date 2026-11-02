@@ -1,11 +1,18 @@
 import { Identicon } from "@/components/stellar/Identicon";
 import { StellarMark } from "@/components/stellar/StellarMark";
 import type { AssetIdentity } from "@/lib/stellar/assetId";
+import type { PoolProtocol } from "@/lib/stellar/pools";
 import { truncateKey } from "@/lib/stellar/strkey";
 import { cn } from "@/lib/utils";
 
 export const assetCodeOf = (identity: AssetIdentity) =>
   identity.kind === "contract" ? truncateKey(identity.contractId, 4) : identity.code;
+
+export const PROTOCOL_LABEL: Record<PoolProtocol, string> = {
+  classic: "Stellar AMM",
+  soroswap: "Soroswap",
+  aquarius: "Aquarius",
+};
 
 const issuedBy = (identity: AssetIdentity) =>
   identity.kind === "issued" ? `${identity.code} issued by ${identity.issuer}` : undefined;

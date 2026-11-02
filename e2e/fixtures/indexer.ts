@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Address, Asset, Networks, xdr } from "@stellar/stellar-sdk";
+import { Address, Asset, Networks, StrKey, xdr } from "@stellar/stellar-sdk";
 import { ACCOUNT, ISSUER, LEDGER } from "./stellar";
 
 export const INDEXER_CLICKHOUSE = "https://clickhouse.indexer.e2e.invalid";
@@ -73,3 +73,73 @@ export const indexedXlmUsdcPool = {
 };
 
 export const MISSING_INDEXED_ASSET_CODE = "ZZZ";
+
+// the same XLM / USDC pool as a classic pool: 10M XLM, so $4.0M at $0.20,
+// with 3 trades of 1,000 XLM worth $200 in the last day
+export const CLASSIC_POOL_ADDRESS = StrKey.encodeLiquidityPool(
+  Buffer.from(indexedXlmUsdcPool.pool_id, "hex"),
+);
+export const indexedClassicPool = {
+  ...indexedXlmUsdcPool,
+  fee_bp: 30,
+  total_shares: "4000000000000",
+  trustlines: 832,
+  last_modified_ledger: INDEXED_LEDGER,
+};
+export const indexedClassicPoolTrades = [
+  {
+    pool: CLASSIC_POOL_ADDRESS,
+    asset_in: "native",
+    asset_out: PRICE_USDC,
+    amount_in: "10000000000",
+    amount_out: "2000000000",
+    trades: "3",
+  },
+];
+
+// a Soroswap XLM / USDC pair holding 1M XLM against 200K USDC: $400.0K
+export const SOROSWAP_PAIR = StrKey.encodeContract(Buffer.alloc(32, 7));
+export const PRICE_USDC_CONTRACT = new Asset(
+  "USDC",
+  PRICE_USDC.split(":")[1],
+).contractId(Networks.PUBLIC);
+const pairReserves: Record<string, string> = {
+  [MAINNET_XLM_CONTRACT]: "10000000000000",
+  [PRICE_USDC_CONTRACT]: "2000000000000",
+};
+// a pair keeps its tokens sorted by contract id bytes
+const pairTokens = Object.keys(pairReserves).sort((a, b) =>
+  Buffer.compare(StrKey.decodeContract(a), StrKey.decodeContract(b)),
+);
+const pairSync = JSON.stringify({
+  map: pairTokens.map((token, i) => ({
+    key: { symbol: `new_reserve_${i}` },
+    val: { i128: pairReserves[token] },
+  })),
+});
+export const indexedSoroswapPair = {
+  contract_id: SOROSWAP_PAIR,
+  soroswap: 1,
+  concentrated: 0,
+  tokens: [],
+  reserves: pairSync,
+  state: "",
+  fee_ratio: 0,
+};
+export const indexedSoroswapReserves = { contract_id: SOROSWAP_PAIR, reserves: pairSync, state: "" };
+export const indexedSoroswapTokens = pairTokens.map((token) => ({
+  account: SOROSWAP_PAIR,
+  contract_id: token,
+  n: "40",
+}));
+export const indexedSoroswapBalances = {
+  holder: SOROSWAP_PAIR,
+  balances: [
+    ["native", pairReserves[MAINNET_XLM_CONTRACT]],
+    [PRICE_USDC, pairReserves[PRICE_USDC_CONTRACT]],
+  ],
+};
+export const indexedAssetContracts = [
+  { contract_id: MAINNET_XLM_CONTRACT, asset: "native" },
+  { contract_id: PRICE_USDC_CONTRACT, asset: PRICE_USDC },
+];

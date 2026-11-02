@@ -83,26 +83,59 @@ export interface ChPoolTrades {
   trades: string | number;
 }
 
-// one row per operation that touched the pool, with what went in and out
-const POOL_OPS = `
-  SELECT account, ledger_sequence, tx_index, op_index, any(closed_at) AS op_time,
-         countIf(amount > 0) AS ins, countIf(amount < 0) AS outs,
-         anyIf(asset, amount > 0) AS asset_in, anyIf(asset, amount < 0) AS asset_out,
-         sumIf(amount, amount > 0) AS amount_in, -sumIf(amount, amount < 0) AS amount_out
-  FROM transfers_by_account
-  WHERE account IN {pools:Array(String)} AND kind = 'transfer' AND %WINDOW%
+// the asset key, or the token contract for Soroban tokens that aren't classic assets
+const KEY = "if(asset = '', contract_id, asset)";
+
+// a trade nets one asset in and another out
+const TRADE = "ins = 1 AND outs = 1";
+
+// Aquarius pays rewards out of the pool, sometimes in the same operation as
+// a deposit, which then looks like a trade; those operations are left out
+const noRewards = (pools: string, window: string) => `
+    AND (account, ledger_sequence, tx_index, op_index) NOT IN (
+      SELECT contract_id, ledger_sequence, tx_index, op_index FROM events
+      WHERE contract_id IN ${pools} AND topics[1] = '{"symbol":"claim_reward"}' AND ${window})`;
+
+// one row per operation that touched the pool, with each asset's net flow:
+// a swap that refunds part of what was sent nets out to one asset in
+const poolOps = (window: string, tokens: boolean) => `
+  SELECT account, ledger_sequence, tx_index, op_index, any(t) AS op_time,
+         countIf(net > 0) AS ins, countIf(net < 0) AS outs,
+         anyIf(asset_key, net > 0) AS asset_in, anyIf(asset_key, net < 0) AS asset_out,
+         sumIf(net, net > 0) AS amount_in, -sumIf(net, net < 0) AS amount_out
+  FROM (
+    SELECT account, ledger_sequence, tx_index, op_index, ${KEY} AS asset_key,
+           any(closed_at) AS t, sum(amount) AS net
+    FROM transfers_by_account
+    WHERE account IN {pools:Array(String)} AND kind = 'transfer' AND ${window}
+      ${tokens ? `AND (account, contract_id) IN {legs:Array(Tuple(String, String))} ${noRewards("{pools:Array(String)}", window)}` : ""}
+    GROUP BY account, ledger_sequence, tx_index, op_index, asset_key)
   GROUP BY account, ledger_sequence, tx_index, op_index`;
 
-/** Trades through each pool over the last `ledgers` ledgers, by direction. */
-export async function indexedPoolTrades(pools: string[], ledgers: number): Promise<ChPoolTrades[]> {
+// a Soroban pool's own token contracts: rewards and fee claims move others
+const legsOf = (tokens: Record<string, string[]>) =>
+  `[${Object.entries(tokens)
+    .flatMap(([pool, ids]) => ids.map((id) => `('${pool}','${id}')`))
+    .join(",")}]`;
+
+/**
+ * Trades through each pool over the last `ledgers` ledgers, by direction.
+ * Soroban pools pass their token contracts by pool address.
+ */
+export async function indexedPoolTrades(
+  pools: string[],
+  ledgers: number,
+  tokens?: Record<string, string[]>,
+): Promise<ChPoolTrades[]> {
   if (!pools.length) return [];
+  const window = "ledger_sequence > (SELECT max(sequence) FROM ledgers) - {ledgers:UInt32}";
   return chQuery<ChPoolTrades>(
     `SELECT account AS pool, asset_in, asset_out, toString(sum(amount_in)) AS amount_in,
             toString(sum(amount_out)) AS amount_out, count() AS trades
-     FROM (${POOL_OPS.replace("%WINDOW%", "ledger_sequence > (SELECT max(sequence) FROM ledgers) - {ledgers:UInt32}")})
-     WHERE ins > 0 AND outs > 0
+     FROM (${poolOps(window, Boolean(tokens))})
+     WHERE ${TRADE}
      GROUP BY pool, asset_in, asset_out`,
-    { pools: list(pools), ledgers },
+    { pools: list(pools), ledgers, ...(tokens && { legs: legsOf(tokens) }) },
   );
 }
 
@@ -111,14 +144,14 @@ export interface ChPoolDay extends Omit<ChPoolTrades, "pool"> {
 }
 
 /** A pool's trades per UTC day for the last `days` days, by direction. */
-export async function indexedPoolDailyTrades(pool: string, days: number): Promise<ChPoolDay[]> {
+export async function indexedPoolDailyTrades(pool: string, days: number, tokens?: string[]): Promise<ChPoolDay[]> {
   return chQuery<ChPoolDay>(
     `SELECT toString(toDate(op_time)) AS day, asset_in, asset_out,
             toString(sum(amount_in)) AS amount_in, toString(sum(amount_out)) AS amount_out, count() AS trades
-     FROM (${POOL_OPS.replace("%WINDOW%", "closed_at >= today() - {days:UInt32}")})
-     WHERE ins > 0 AND outs > 0
+     FROM (${poolOps("closed_at >= today() - {days:UInt32}", Boolean(tokens))})
+     WHERE ${TRADE}
      GROUP BY day, asset_in, asset_out ORDER BY day`,
-    { pools: list([pool]), days },
+    { pools: list([pool]), days, ...(tokens && { legs: legsOf({ [pool]: tokens }) }) },
   );
 }
 
@@ -128,13 +161,16 @@ export interface ChPoolOp {
   op_index: number;
   closed_at: string;
   counterparty: string;
-  /** [asset, base units] per transfer; positive went into the pool. */
+  /** [asset key or token contract, base units] per transfer; positive went into the pool. */
   legs: Array<[string, string]>;
   tx_hash: string;
 }
 
-/** The pool's latest operations: trades, deposits and withdrawals, newest first. */
-export async function indexedPoolActivity(pool: string, limit: number): Promise<ChPoolOp[]> {
+/**
+ * The pool's latest operations: trades, deposits and withdrawals, newest
+ * first. A Soroban pool passes its token contracts.
+ */
+export async function indexedPoolActivity(pool: string, limit: number, tokens?: string[]): Promise<ChPoolOp[]> {
   // aliases can't reuse column names: ClickHouse would read them in WHERE too
   const rows = await chQuery<{
     ledger_sequence: number;
@@ -144,17 +180,18 @@ export async function indexedPoolActivity(pool: string, limit: number): Promise<
     op_counterparty: string;
     legs: Array<[string, string]>;
   }>(
-    `SELECT ledger_sequence, tx_index, op_index, any(closed_at) AS op_time,
-            any(counterparty) AS op_counterparty, groupArray((asset, toString(amount))) AS legs
+    `-- the last few hundred transfers are enough, read in key order
+     WITH ifNull((
+       SELECT ledger_sequence FROM transfers_by_account WHERE account = {pool:String}
+       ORDER BY ledger_sequence DESC LIMIT 1 OFFSET {scan:UInt32}), 0) AS since
+     SELECT ledger_sequence, tx_index, op_index, any(closed_at) AS op_time,
+            any(counterparty) AS op_counterparty, groupArray((${KEY}, toString(amount))) AS legs
      FROM transfers_by_account
-     WHERE account = {pool:String} AND kind = 'transfer'
-       -- the last few hundred transfers are enough, read in key order
-       AND ledger_sequence >= ifNull((
-         SELECT ledger_sequence FROM transfers_by_account WHERE account = {pool:String}
-         ORDER BY ledger_sequence DESC LIMIT 1 OFFSET {scan:UInt32}), 0)
+     WHERE account = {pool:String} AND kind = 'transfer' AND ledger_sequence >= since
+       ${tokens ? `AND contract_id IN {tokens:Array(String)} ${noRewards("({pool:String})", "ledger_sequence >= since")}` : ""}
      GROUP BY ledger_sequence, tx_index, op_index
      ORDER BY ledger_sequence DESC, tx_index DESC, op_index DESC LIMIT {limit:UInt32}`,
-    { pool, limit, scan: limit * 4 },
+    { pool, limit, scan: limit * 4, ...(tokens && { tokens: list(tokens) }) },
   );
   const ops = rows.map(({ op_time, op_counterparty, ...r }) => ({
     ...r,
