@@ -27,7 +27,16 @@ import {
   indexedSorobanPools,
   indexedSorobanReserves,
 } from "./indexer/sorobanPools";
-import { anchorAssets, buildPriceBook, valueByHoldings, valueBySide, type PriceBook } from "./prices";
+import { classicReserveHistory, dayStart, getPriceHistory, sorobanReserveHistory } from "./poolHistory";
+import {
+  anchorAssets,
+  buildPriceBook,
+  fromAnchorBook,
+  valueByHoldings,
+  valueBySide,
+  type PriceBook,
+} from "./prices";
+import type { TvlPoint } from "./defi";
 import {
   SOROSWAP_FEE_BP,
   aquariusPool,
@@ -116,8 +125,10 @@ export interface ProtocolActivity extends PoolActivity {
 }
 
 export interface PoolDetail extends PoolSummary {
-  /** Trade volume in USD per UTC day, valued at today's prices. */
+  /** Trade volume in USD per UTC day, at that day's prices. */
   daily: Array<{ date: number; volume: number }>;
+  /** Value locked at the end of each UTC day, at that day's prices. */
+  tvlHistory: TvlPoint[];
   activity: PoolActivity[];
 }
 
@@ -255,6 +266,8 @@ function summarizeSoroban(
   book: PriceBook,
   info: SorobanPoolInfo,
   live?: { reserves: string; state: string },
+  // a past day's reserves can't be held against today's balances
+  checkBacking = true,
 ): PoolSummary | null {
   const reserves = reservesOf(live?.reserves || info.reserves);
   if (!reserves) return null;
@@ -282,7 +295,7 @@ function summarizeSoroban(
   // events are the contract's own word: the side it's valued by has to be
   // held for real, give or take a day of deposits since the daily copy
   const by = value && [a, b].find((s) => s.key === value!.by);
-  if (by && Number(info.balances[by.key] ?? 0) * 2 < Number(reserves[by === a ? 0 : 1])) value = null;
+  if (checkBacking && by && Number(info.balances[by.key] ?? 0) * 2 < Number(reserves[by === a ? 0 : 1])) value = null;
   return {
     id: info.id,
     address: info.id,
@@ -428,6 +441,56 @@ export function getProtocolTotals(): Promise<ProtocolTotals[] | null> {
   );
 }
 
+/** Value locked per protocol at the end of a UTC day, in USD. */
+export interface ProtocolDay {
+  /** Unix seconds, start of the day. */
+  date: number;
+  tvl: Record<PoolProtocol, number>;
+}
+
+// today's valued pools, each walked back day by day at that day's prices
+async function loadProtocolHistory(): Promise<ProtocolDay[]> {
+  const book = buildPriceBook(await indexedPricePools());
+  const ids = await indexedPoolCandidates(anchorAssets(book), CLASSIC_POOLS);
+  const [{ days, books }, live, soroban] = await Promise.all([
+    getPriceHistory(),
+    indexedLivePools(ids),
+    liveSorobanPools(book),
+  ]);
+  const classic = live.filter((pool) => summarize(book, pool).tvlXlm !== null);
+  const valued = new Set(soroban.pools.filter((p) => p.tvlXlm !== null).map((p) => p.id));
+  const infos = soroban.infos.filter((i) => valued.has(i.id));
+  const [classicDays, sorobanDays] = await Promise.all([
+    classicReserveHistory(classic, days),
+    sorobanReserveHistory(infos.map((i) => i.id), days),
+  ]);
+  return days.map((day, i) => {
+    const dayBook = i === days.length - 1 ? book : fromAnchorBook(books[i]);
+    const tvl: Record<PoolProtocol, number> = { classic: 0, aquarius: 0, soroswap: 0 };
+    classic.forEach((pool, k) => {
+      const r = classicDays[k][i];
+      if (r) tvl.classic += summarize(dayBook, { ...pool, reserve_a: String(r[0]), reserve_b: String(r[1]) }).tvlUsd ?? 0;
+    });
+    infos.forEach((info, k) => {
+      const r = sorobanDays[k][i];
+      if (r) tvl[info.protocol] += summarizeSoroban(dayBook, info, r, false)?.tvlUsd ?? 0;
+    });
+    return { date: dayStart(day), tvl };
+  });
+}
+
+const cachedProtocolHistory = unstable_cache(loadProtocolHistory, ["protocol-history"], { revalidate: 3600 });
+
+/**
+ * Value locked per protocol at the end of each day we can rebuild. Mainnet
+ * facts shown on every network; null when the indexer is off or failed.
+ */
+export function getProtocolTvlHistory(): Promise<ProtocolDay[] | null> {
+  return withIndexer<ProtocolDay[] | null>("protocol tvl history", cachedProtocolHistory, async () => null, {
+    anyNetwork: true,
+  });
+}
+
 type ChPoolOp = Awaited<ReturnType<typeof indexedPoolActivity>>[number];
 
 function activityOf(op: ChPoolOp): PoolActivity | null {
@@ -458,10 +521,13 @@ function activityOf(op: ChPoolOp): PoolActivity | null {
   };
 }
 
-function dailyVolume(book: PriceBook, rows: Awaited<ReturnType<typeof indexedPoolDailyTrades>>) {
+function dailyVolume(
+  bookOf: (day: string) => PriceBook,
+  rows: Awaited<ReturnType<typeof indexedPoolDailyTrades>>,
+) {
   if (!rows.length) return [];
   const byDay = new Map<string, number>();
-  for (const row of rows) byDay.set(row.day, (byDay.get(row.day) ?? 0) + (tradeValueUsd(book, row) ?? 0));
+  for (const row of rows) byDay.set(row.day, (byDay.get(row.day) ?? 0) + (tradeValueUsd(bookOf(row.day), row) ?? 0));
   // every day from the first with trades to today, quiet days as zero
   const points: Array<{ date: number; volume: number }> = [];
   const first = Date.parse(`${rows[0].day}T00:00:00Z`);
@@ -472,15 +538,51 @@ function dailyVolume(book: PriceBook, rows: Awaited<ReturnType<typeof indexedPoo
   return points;
 }
 
-async function poolDetail(book: PriceBook, summary: PoolSummary, tokens?: string[]): Promise<PoolDetail> {
-  const [trades, daily, activity] = await Promise.all([
+type PoolSource = { classic: ChPool } | { soroban: SorobanPoolInfo };
+
+// the price history is a nice to have: without it the page still shows today
+async function priceHistory(): Promise<{ days: string[]; books: PriceBook[] }> {
+  try {
+    const { days, books } = await getPriceHistory();
+    return { days, books: books.map(fromAnchorBook) };
+  } catch (error) {
+    console.warn("[indexer] price history: failed", error instanceof Error ? error.message : error);
+    return { days: [], books: [] };
+  }
+}
+
+// value locked at the end of each day, today's at today's live prices
+async function tvlHistory(book: PriceBook, source: PoolSource, days: string[], books: PriceBook[]): Promise<TvlPoint[]> {
+  const bookOn = (i: number) => (i === days.length - 1 ? book : books[i]);
+  const values =
+    "classic" in source
+      ? (await classicReserveHistory([source.classic], days))[0]?.map(
+          (r, i) => r && summarize(bookOn(i), { ...source.classic, reserve_a: String(r[0]), reserve_b: String(r[1]) }).tvlUsd,
+        )
+      : (await sorobanReserveHistory([source.soroban.id], days))[0]?.map(
+          (r, i) => r && summarizeSoroban(bookOn(i), source.soroban, r, false)?.tvlUsd,
+        );
+  return (values ?? []).flatMap((tvl, i) => (tvl == null ? [] : [{ date: dayStart(days[i]), tvl }]));
+}
+
+async function poolDetail(book: PriceBook, summary: PoolSummary, source: PoolSource): Promise<PoolDetail> {
+  const tokens = "soroban" in source ? source.soroban.tokens : undefined;
+  const [trades, daily, activity, history] = await Promise.all([
     indexedPoolTrades([summary.address], LEDGERS_PER_DAY, tokens && { [summary.address]: tokens }),
     indexedPoolDailyTrades(summary.address, DAYS, tokens),
     indexedPoolActivity(summary.address, ACTIVITY, tokens),
+    priceHistory(),
   ]);
+  const books = new Map(history.days.map((day, i) => [day, history.books[i]]));
   return {
     ...withVolume(book, summary, trades),
-    daily: dailyVolume(book, daily),
+    daily: dailyVolume((day) => books.get(day) ?? book, daily),
+    tvlHistory: history.days.length
+      ? await tvlHistory(book, source, history.days, history.books).catch((error) => {
+          console.warn("[indexer] pool tvl history: failed", error instanceof Error ? error.message : error);
+          return [];
+        })
+      : [],
     activity: activity.map(activityOf).filter((a): a is PoolActivity => a !== null),
   };
 }
@@ -498,11 +600,11 @@ export const getPool = cache(
         const [info] = await loadSorobanInfo([id]);
         const summary = info && summarizeSoroban(book, info);
         if (!summary) return "missing" as const;
-        return poolDetail(book, summary, info.tokens);
+        return poolDetail(book, summary, { soroban: info });
       }
       const pool = await indexedPool(id);
       if (!pool) return "missing" as const;
-      return poolDetail(book, summarize(book, pool));
+      return poolDetail(book, summarize(book, pool), { classic: pool });
     }),
 );
 

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   MIN_DEPTH_XLM,
   USDC,
+  anchorBook,
   buildPriceBook,
+  fromAnchorBook,
   orderBookPrice,
   valueBySide,
   valueByHoldings,
@@ -140,5 +142,30 @@ describe("valueByHoldings", () => {
 
   it("can't value a pool with no trusted side", () => {
     expect(valueByHoldings(book, { asset: LGSC, amount: 5 }, { asset: EURC, amount: 5 }, 1)).toBeNull();
+  });
+});
+
+describe("anchorBook", () => {
+  const LGSC = "LGSC:GAJ4DUVTCJKVFW2SBGRLOX5S3J5XP5BWA6DWDLYRLL45F5G7LBDO2SMP";
+  const book = buildPriceBook([
+    XLM_USDC,
+    pool("aqua", "native", 500_000, AQUA, 1_000_000),
+    pool("lgsc", "native", 1_500, LGSC, 1),
+  ]);
+  const again = fromAnchorBook(anchorBook(book));
+
+  it("keeps only the assets that can value a pool", () => {
+    expect([...again.assets.keys()].sort()).toEqual([AQUA, USDC, "native"].sort());
+  });
+
+  it("values pools as the full book does", () => {
+    const sides = [
+      { asset: AQUA, amount: 10 },
+      { asset: USDC, amount: 1 },
+    ] as const;
+    expect(valueBySide(again, ...sides)).toEqual(valueBySide(book, ...sides));
+    expect(valueBySide(again, { asset: AQUA, amount: 3 }, { asset: LGSC, amount: 9 })).toEqual(
+      valueBySide(book, { asset: AQUA, amount: 3 }, { asset: LGSC, amount: 9 }),
+    );
   });
 });

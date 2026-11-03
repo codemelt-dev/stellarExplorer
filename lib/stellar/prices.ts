@@ -187,3 +187,35 @@ export function anchorAssets(book: PriceBook): Array<{ asset: string; xlm: numbe
     .filter(([asset]) => trust(book, asset) > 0)
     .map(([asset, price]) => ({ asset, xlm: price.xlm }));
 }
+
+/** Only what values a pool: XLM in USD and each anchor's price and depth. Small enough to cache by the day. */
+export interface AnchorBook {
+  xlmUsd: number | null;
+  anchors: Array<[asset: string, xlm: number, depthXlm: number | null]>;
+}
+
+export function anchorBook(book: PriceBook): AnchorBook {
+  return {
+    xlmUsd: book.xlmUsd,
+    anchors: [...book.assets.entries()]
+      .filter(([asset]) => trust(book, asset) > 0)
+      .map(([asset, price]) => [asset, price.xlm, price.depthXlm]),
+  };
+}
+
+/** A price book again, good for valuing pools though not for pricing every asset. */
+export function fromAnchorBook({ xlmUsd, anchors }: AnchorBook): PriceBook {
+  const assets = new Map<string, AssetPrice>(
+    anchors.map(([asset, xlm, depthXlm]) => [
+      asset,
+      {
+        xlm,
+        usd: xlmUsd === null ? null : xlm * xlmUsd,
+        source: asset === USDC ? "usdc pool" : "xlm pool",
+        poolId: null,
+        depthXlm,
+      },
+    ]),
+  );
+  return { xlmUsd, xlmPoolId: null, assets };
+}

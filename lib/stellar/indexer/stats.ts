@@ -28,6 +28,21 @@ export async function indexedNewAccounts(days: number): Promise<DayCount[]> {
 }
 
 /**
+ * UTC days indexed from their first ledger over the last `days` days, oldest
+ * first. The day the index started partway through is left out.
+ */
+export async function indexedLedgerDays(days: number): Promise<string[]> {
+  const rows = await chQuery<{ day: string }>(
+    `SELECT toString(toDate(closed_at)) AS day FROM ledgers
+     WHERE closed_at >= today() - {days:UInt32}
+     GROUP BY day HAVING min(closed_at) < toStartOfDay(min(closed_at)) + 60
+     ORDER BY day`,
+    { days },
+  );
+  return rows.map((r) => r.day);
+}
+
+/**
  * New assets per day: assets whose first snapshot falls on that day. A
  * snapshot dated D is the state at the end of D. The window's first snapshot
  * is the baseline, everything in it already existed.

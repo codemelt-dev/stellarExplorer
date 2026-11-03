@@ -47,6 +47,8 @@ function requireHeader(
   }
 }
 
+const utcDay = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+
 function clickhouseResponse(
   url: URL,
   method: string,
@@ -123,6 +125,17 @@ function clickhouseResponse(
     rows = indexedAssetContracts;
   } else if (body.includes("SELECT count() AS events FROM events")) {
     rows = [{ events: "120" }];
+  } else if (body.includes("AS day FROM ledgers")) {
+    // the indexer holds yesterday and today, so pool history has two days
+    rows = [utcDay(-1), utcDay(0)].map((day) => ({ day }));
+  } else if (body.includes("FROM events") && body.includes("AS day")) {
+    // the pair synced once today, to the reserves it still has
+    rows = url.searchParams.get("param_ids")?.includes(SOROSWAP_PAIR)
+      ? [{ ...indexedSoroswapReserves, day: utcDay(0) }]
+      : [];
+  } else if (body.includes("FROM transfers_by_account") && body.includes("kind != 'fee'")) {
+    // nothing moved in or out of a pool since yesterday
+    rows = [];
   } else if (body.includes("FROM events") && body.includes("HAVING soroswap")) {
     rows = url.searchParams.get("param_ids")?.includes(SOROSWAP_PAIR) ? [indexedSoroswapPair] : [];
   } else if (body.includes("FROM events") && body.includes("AS state")) {

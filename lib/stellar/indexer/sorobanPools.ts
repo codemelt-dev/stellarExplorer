@@ -144,6 +144,46 @@ export async function indexedSorobanReserves(ids: string[], ledgers: number): Pr
   );
 }
 
+/** Each pool's last reserves and pool state in the 30 days before `day`. */
+export async function indexedSorobanReservesBefore(ids: string[], day: string): Promise<ChPoolReserves[]> {
+  const valid = ids.filter((id) => CONTRACT.test(id));
+  if (!valid.length) return [];
+  return chQuery<ChPoolReserves>(
+    `SELECT contract_id,
+            argMaxIf(data, ${LATEST}, ${UPDATE_RESERVES} OR ${SYNC}) AS reserves,
+            argMaxIf(data, ${LATEST}, ${POOL_STATE}) AS state
+     FROM events
+     WHERE contract_id IN {ids:Array(String)}
+       AND closed_at >= {day:Date} - 30 AND closed_at < {day:Date}
+       AND (${UPDATE_RESERVES} OR ${SYNC} OR ${POOL_STATE})
+     GROUP BY contract_id`,
+    { ids: list(valid), day },
+  );
+}
+
+export interface ChPoolDayReserves extends ChPoolReserves {
+  day: string;
+}
+
+/**
+ * Each pool's last reserves and pool state of every UTC day from `since` on,
+ * for the days it emitted them; either is empty on a day it didn't.
+ */
+export async function indexedSorobanDailyReserves(ids: string[], since: string): Promise<ChPoolDayReserves[]> {
+  const valid = ids.filter((id) => CONTRACT.test(id));
+  if (!valid.length) return [];
+  return chQuery<ChPoolDayReserves>(
+    `SELECT contract_id, toString(toDate(closed_at)) AS day,
+            argMaxIf(data, ${LATEST}, ${UPDATE_RESERVES} OR ${SYNC}) AS reserves,
+            argMaxIf(data, ${LATEST}, ${POOL_STATE}) AS state
+     FROM events
+     WHERE contract_id IN {ids:Array(String)} AND closed_at >= {since:Date}
+       AND (${UPDATE_RESERVES} OR ${SYNC} OR ${POOL_STATE})
+     GROUP BY contract_id, day`,
+    { ids: list(valid), since },
+  );
+}
+
 /**
  * The token contracts each contract moved over the last `ledgers` ledgers,
  * with how many transfers. A Soroswap pair's two tokens come from here; its

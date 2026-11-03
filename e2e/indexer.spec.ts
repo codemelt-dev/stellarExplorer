@@ -153,6 +153,12 @@ test("a classic pool page opens from its L address", async ({ page }) => {
   await expect(main.getByText("3 trades", { exact: true })).toBeVisible();
   await expect(main.getByText("832", { exact: true })).toBeVisible();
   await expect(main.getByText("400.0K pool shares", { exact: true })).toBeVisible();
+
+  // nothing moved since yesterday, so both days hold today's reserves
+  await main.getByRole("group", { name: "Metric" }).getByRole("button", { name: "TVL" }).click();
+  await expect(
+    main.getByRole("img", { name: "XLM / USDC pool value locked over the last 2 days, currently $4.0M" }),
+  ).toBeVisible();
 });
 
 test("the DeFi overview adds up our pools by protocol next to DefiLlama", async ({
@@ -165,6 +171,9 @@ test("the DeFi overview adds up our pools by protocol next to DefiLlama", async 
   await expect(main.getByText("$4.4M", { exact: true })).toBeVisible();
   await expect(main.getByText("2 pools", { exact: true })).toBeVisible();
   await expect(main.getByText("3 trades", { exact: true })).toBeVisible();
+  await expect(
+    main.getByRole("img", { name: "Value locked in the pools we index over the last 2 days, currently $4.4M" }),
+  ).toBeVisible();
 
   const classic = main.getByRole("link", { name: "Open Stellar AMM", exact: true });
   await expect(classic).toContainText("$4.0M");

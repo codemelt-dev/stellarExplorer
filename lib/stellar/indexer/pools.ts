@@ -155,6 +155,30 @@ export async function indexedPoolDailyTrades(pool: string, days: number, tokens?
   );
 }
 
+export interface ChPoolDayFlow {
+  /** The pool's L or C address. */
+  pool: string;
+  day: string;
+  asset_key: string;
+  /** Base units in minus out, as a digit string. */
+  net: string;
+}
+
+/**
+ * What went into each pool minus what came out, per asset and UTC day, from
+ * `since` on. Every kind of movement counts: trades, liquidity, clawbacks.
+ */
+export async function indexedPoolDailyFlows(pools: string[], since: string): Promise<ChPoolDayFlow[]> {
+  if (!pools.length) return [];
+  return chQuery<ChPoolDayFlow>(
+    `SELECT account AS pool, toString(toDate(closed_at)) AS day, ${KEY} AS asset_key, toString(sum(amount)) AS net
+     FROM transfers_by_account
+     WHERE account IN {pools:Array(String)} AND kind != 'fee' AND closed_at >= {since:Date}
+     GROUP BY pool, day, asset_key`,
+    { pools: list(pools), since },
+  );
+}
+
 export interface ChPoolOp {
   /** The pool's L or C address. */
   pool: string;

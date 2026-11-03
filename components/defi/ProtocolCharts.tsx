@@ -15,10 +15,15 @@ export function ProtocolCharts({
   tvl,
   volume,
   noVolumeMessage,
+  noTvlMessage = "Couldn't reach DefiLlama. TVL history will be back on the next refresh.",
+  tvlLabel,
 }: {
   tvl: TvlPoint[];
   volume: Array<{ date: number; volume: number }> | null;
   noVolumeMessage: string;
+  noTvlMessage?: string;
+  /** What the TVL chart shows, for screen readers. */
+  tvlLabel?: string;
 }) {
   const [metric, setMetric] = useState<Metric>(volume ? "volume" : "tvl");
   const [days, setDays] = useState<(typeof RANGES)[number]>(30);
@@ -53,9 +58,9 @@ export function ProtocolCharts({
       <div className="flex flex-1 flex-col justify-center">
         {metric === "tvl" ? (
           tvlPoints.length > 1 ? (
-            <TvlChart points={tvlPoints} />
+            <TvlChart points={tvlPoints} label={tvlLabel} />
           ) : (
-            <EmptyState message="Couldn't reach DefiLlama. TVL history will be back on the next refresh." />
+            <EmptyState message={noTvlMessage} />
           )
         ) : volumePoints.length > 0 ? (
           <VolumeChart points={volumePoints} />

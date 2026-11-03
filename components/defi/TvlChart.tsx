@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { StellarMark } from "@/components/stellar/StellarMark";
 import { compactUsd } from "@/lib/format";
 import type { TvlBreakdownRow, TvlPoint } from "@/lib/stellar/defi";
 
@@ -13,9 +14,12 @@ const PAD_Y = 10;
 export function TvlChart({
   points,
   breakdown,
+  label = "Stellar DeFi total value locked",
 }: {
   points: TvlPoint[];
   breakdown?: Record<number, TvlBreakdownRow[]>;
+  /** What the chart shows, for screen readers. */
+  label?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -52,7 +56,7 @@ export function TvlChart({
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
         role="img"
-        aria-label={`Stellar DeFi total value locked over the last ${points.length} days, currently ${compactUsd(points[points.length - 1].tvl)}`}
+        aria-label={`${label} over the last ${points.length} days, currently ${compactUsd(points[points.length - 1].tvl)}`}
       >
         <defs>
           <linearGradient id="tvl-fill" x1="0" y1="0" x2="0" y2="1">
@@ -138,15 +142,19 @@ export function TvlChart({
                     className="flex items-center justify-between gap-2 text-[11px] leading-4"
                   >
                     <span className="flex min-w-0 items-center gap-1.5">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={row.logo}
-                        alt=""
-                        width={10}
-                        height={10}
-                        className="size-2.5 shrink-0 rounded-full"
-                        loading="lazy"
-                      />
+                      {row.logo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={row.logo}
+                          alt=""
+                          width={10}
+                          height={10}
+                          className="size-2.5 shrink-0 rounded-full"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <StellarMark className="size-2.5 shrink-0" />
+                      )}
                       <span className="truncate">{row.name}</span>
                     </span>
                     <span className="shrink-0 font-mono">

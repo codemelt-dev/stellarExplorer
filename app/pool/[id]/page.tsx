@@ -18,7 +18,7 @@ import { StatTile } from "@/components/stats/StatTile";
 import { PagedList } from "@/components/layout/PagedList";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
-import { VolumeChart } from "@/components/defi/VolumeChart";
+import { ProtocolCharts } from "@/components/defi/ProtocolCharts";
 import { PROTOCOL_LABEL, PoolPair, assetCodeOf } from "@/components/pool/PoolPair";
 import { PoolActivityRow } from "@/components/pool/PoolActivityRow";
 import { assetKey, type AssetIdentity } from "@/lib/stellar/assetId";
@@ -229,20 +229,20 @@ export default async function PoolPage({ params }: { params: Promise<{ id: strin
         </Card>
       </section>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Daily volume</h2>
+      <section aria-label="History" className="flex flex-col gap-3">
         <Card className="gap-3 p-5">
-          {pool.daily.length ? (
-            <>
-              <VolumeChart points={pool.daily} />
-              <p className="text-xs text-dim">
-                Trades through the pool per UTC day over the last 30 days, valued at today&apos;s
-                prices.
-              </p>
-            </>
-          ) : (
-            <EmptyState message="No trades through this pool in the last 30 days." />
-          )}
+          <ProtocolCharts
+            tvl={pool.tvlHistory}
+            volume={pool.daily}
+            tvlLabel={`${codeA} / ${codeB} pool value locked`}
+            noVolumeMessage="No trades through this pool in the last 30 days."
+            noTvlMessage="Not enough indexed days to chart this pool's value yet."
+          />
+          <p className="text-xs text-dim">
+            Per UTC day at that day&apos;s prices from our own pools: value locked at the end of the
+            day, rebuilt from {soroban ? "the pool's reserves events" : "every transfer in and out of the pool"}, and
+            trades through it.
+          </p>
         </Card>
       </section>
 

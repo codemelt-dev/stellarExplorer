@@ -13,13 +13,21 @@ import {
 } from "@/components/ui/table";
 import { ClickableRow } from "@/components/stellar/ClickableRow";
 import { StellarMark } from "@/components/stellar/StellarMark";
+import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
 import { StatTile } from "@/components/stats/StatTile";
 import { ProtocolIcon } from "@/components/defi/ProtocolIcon";
+import { TvlChart } from "@/components/defi/TvlChart";
 import { listHeadClass } from "@/components/layout/listTable";
 import { PROTOCOL_LABEL } from "@/components/pool/PoolPair";
-import { getProtocols, PROTOCOLS, type ProtocolRow } from "@/lib/stellar/defi";
-import { getProtocolTotals, type PoolProtocol, type ProtocolTotals } from "@/lib/stellar/pools";
+import { getProtocols, PROTOCOLS, type ProtocolRow, type TvlBreakdownRow } from "@/lib/stellar/defi";
+import {
+  getProtocolTotals,
+  getProtocolTvlHistory,
+  type PoolProtocol,
+  type ProtocolDay,
+  type ProtocolTotals,
+} from "@/lib/stellar/pools";
 import { protocolLogo } from "@/lib/stellar/protocols";
 import { compactUsd, percentGap } from "@/lib/format";
 
@@ -49,7 +57,7 @@ interface Row {
 }
 
 export default async function DefiPage() {
-  const [totals, llama] = await Promise.all([getProtocolTotals(), getProtocols()]);
+  const [totals, llama, history] = await Promise.all([getProtocolTotals(), getProtocols(), getProtocolTvlHistory()]);
   const llamaBySlug = new Map(llama.map((p) => [p.slug, p]));
 
   const indexedRows: Row[] = INDEXED.map(({ protocol, slug }) => {
@@ -146,6 +154,8 @@ export default async function DefiPage() {
           />
         </Card>
       )}
+
+      <HistoryCard history={history} />
 
       <section id="protocols" className="flex scroll-mt-24 flex-col gap-3">
         <h2 className="text-lg font-semibold">By protocol</h2>
@@ -250,8 +260,8 @@ export default async function DefiPage() {
               classic AMM pools at all.
             </li>
             <li>
-              These are live figures. Our history starts on 6 October 2026, so the charts on the
-              protocol pages still come from DefiLlama.{" "}
+              Our index starts on 6 October 2026, so the chart above does too and grows with the
+              history backfill. The charts on the protocol pages still come from DefiLlama.{" "}
               <Link href="/liquidity-pools" className="text-gold hover:underline underline-offset-4">
                 See every pool
               </Link>
@@ -260,5 +270,53 @@ export default async function DefiPage() {
         </Card>
       </section>
     </div>
+  );
+}
+
+const day = (date: number) => new Date(date * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+
+function HistoryCard({ history }: { history: ProtocolDay[] | null }) {
+  const points = (history ?? []).map((d) => ({
+    date: d.date,
+    tvl: INDEXED.reduce((s, { protocol }) => s + d.tvl[protocol], 0),
+  }));
+  // the tooltip splits each day by protocol, biggest first
+  const breakdown: Record<number, TvlBreakdownRow[]> = {};
+  for (const d of history ?? []) {
+    breakdown[Math.floor(d.date / 86400)] = INDEXED.filter(({ protocol }) => d.tvl[protocol] > 0)
+      .map(({ protocol, slug }) => ({
+        slug: protocol,
+        name: PROTOCOL_LABEL[protocol],
+        logo: slug && protocolLogo(slug),
+        tvl: d.tvl[protocol],
+      }))
+      .sort((x, y) => y.tvl - x.tvl);
+  }
+  return (
+    <Card className="tile gap-3 p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold">Value locked over time</h2>
+        {points.length > 1 && (
+          <span className="text-xs uppercase tracking-wider text-dim">
+            {day(points[0].date)} to {day(points[points.length - 1].date)}
+          </span>
+        )}
+      </div>
+      {points.length > 1 ? (
+        <>
+          <TvlChart points={points} breakdown={breakdown} label="Value locked in the pools we index" />
+          <p className="text-xs text-dim">
+            At the end of each UTC day, at that day&apos;s prices from our own pools: classic pools
+            rebuilt from every transfer in and out, Soroban pools from their reserves events. It
+            follows today&apos;s pools back as far as our index goes; a quiet Soroban pool joins at
+            its first reserves update.
+          </p>
+        </>
+      ) : history ? (
+        <EmptyState message="Our index doesn't have two full days to chart yet." />
+      ) : (
+        <ErrorState message="Couldn't rebuild the history from the indexer. It'll be back on the next refresh." className="py-6" />
+      )}
+    </Card>
   );
 }
