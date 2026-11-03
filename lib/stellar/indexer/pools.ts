@@ -155,6 +155,32 @@ export async function indexedPoolDailyTrades(pool: string, days: number, tokens?
   );
 }
 
+export interface ChPoolsDay extends ChPoolTrades {
+  day: string;
+}
+
+/**
+ * Trades through each pool per UTC day from `from` to `to`, by direction.
+ * Soroban pools pass their token contracts by pool address. A few hundred
+ * pools are about a day's worth of memory: ask for longer spans day by day.
+ */
+export async function indexedPoolsDailyTrades(
+  pools: string[],
+  from: string,
+  to: string,
+  tokens?: Record<string, string[]>,
+): Promise<ChPoolsDay[]> {
+  if (!pools.length) return [];
+  return chQuery<ChPoolsDay>(
+    `SELECT account AS pool, toString(toDate(op_time)) AS day, asset_in, asset_out,
+            toString(sum(amount_in)) AS amount_in, toString(sum(amount_out)) AS amount_out, count() AS trades
+     FROM (${poolOps("closed_at >= {from:Date} AND closed_at < {to:Date} + 1", Boolean(tokens))})
+     WHERE ${TRADE}
+     GROUP BY pool, day, asset_in, asset_out`,
+    { pools: list(pools), from, to, ...(tokens && { legs: legsOf(tokens) }) },
+  );
+}
+
 export interface ChPoolDayFlow {
   /** The pool's L or C address. */
   pool: string;

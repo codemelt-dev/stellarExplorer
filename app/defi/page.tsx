@@ -13,19 +13,20 @@ import {
 } from "@/components/ui/table";
 import { ClickableRow } from "@/components/stellar/ClickableRow";
 import { StellarMark } from "@/components/stellar/StellarMark";
-import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
 import { StatTile } from "@/components/stats/StatTile";
 import { ProtocolIcon } from "@/components/defi/ProtocolIcon";
-import { TvlChart } from "@/components/defi/TvlChart";
+import { ProtocolCharts } from "@/components/defi/ProtocolCharts";
 import { listHeadClass } from "@/components/layout/listTable";
 import { PROTOCOL_LABEL } from "@/components/pool/PoolPair";
 import { getProtocols, PROTOCOLS, type ProtocolRow, type TvlBreakdownRow } from "@/lib/stellar/defi";
 import {
   getProtocolTotals,
   getProtocolTvlHistory,
+  getProtocolVolumeHistory,
   type PoolProtocol,
   type ProtocolDay,
+  type ProtocolVolumeDay,
   type ProtocolTotals,
 } from "@/lib/stellar/pools";
 import { protocolLogo } from "@/lib/stellar/protocols";
@@ -57,7 +58,12 @@ interface Row {
 }
 
 export default async function DefiPage() {
-  const [totals, llama, history] = await Promise.all([getProtocolTotals(), getProtocols(), getProtocolTvlHistory()]);
+  const [totals, llama, history, volume] = await Promise.all([
+    getProtocolTotals(),
+    getProtocols(),
+    getProtocolTvlHistory(),
+    getProtocolVolumeHistory(),
+  ]);
   const llamaBySlug = new Map(llama.map((p) => [p.slug, p]));
 
   const indexedRows: Row[] = INDEXED.map(({ protocol, slug }) => {
@@ -155,7 +161,7 @@ export default async function DefiPage() {
         </Card>
       )}
 
-      <HistoryCard history={history} />
+      <HistoryCard tvl={history} volume={volume} />
 
       <section id="protocols" className="flex scroll-mt-24 flex-col gap-3">
         <h2 className="text-lg font-semibold">By protocol</h2>
@@ -273,50 +279,43 @@ export default async function DefiPage() {
   );
 }
 
-const day = (date: number) => new Date(date * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
-function HistoryCard({ history }: { history: ProtocolDay[] | null }) {
-  const points = (history ?? []).map((d) => ({
-    date: d.date,
-    tvl: INDEXED.reduce((s, { protocol }) => s + d.tvl[protocol], 0),
-  }));
-  // the tooltip splits each day by protocol, biggest first
-  const breakdown: Record<number, TvlBreakdownRow[]> = {};
-  for (const d of history ?? []) {
-    breakdown[Math.floor(d.date / 86400)] = INDEXED.filter(({ protocol }) => d.tvl[protocol] > 0)
-      .map(({ protocol, slug }) => ({
-        slug: protocol,
-        name: PROTOCOL_LABEL[protocol],
-        logo: slug && protocolLogo(slug),
-        tvl: d.tvl[protocol],
-      }))
-      .sort((x, y) => y.tvl - x.tvl);
-  }
+// each day split by protocol for the tooltip, biggest first
+function split(values: Record<PoolProtocol, number>): TvlBreakdownRow[] {
+  return INDEXED.filter(({ protocol }) => values[protocol] > 0)
+    .map(({ protocol, slug }) => ({
+      slug: protocol,
+      name: PROTOCOL_LABEL[protocol],
+      logo: slug && protocolLogo(slug),
+      tvl: values[protocol],
+    }))
+    .sort((x, y) => y.tvl - x.tvl);
+}
+
+const sumOf = (values: Record<PoolProtocol, number>) => INDEXED.reduce((s, { protocol }) => s + values[protocol], 0);
+const dayKey = (date: number) => Math.floor(date / 86400);
+
+function HistoryCard({ tvl, volume }: { tvl: ProtocolDay[] | null; volume: ProtocolVolumeDay[] | null }) {
+  const failed = "Couldn't rebuild the history from the indexer. It'll be back on the next refresh.";
   return (
     <Card className="tile gap-3 p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold">Value locked over time</h2>
-        {points.length > 1 && (
-          <span className="text-xs uppercase tracking-wider text-dim">
-            {day(points[0].date)} to {day(points[points.length - 1].date)}
-          </span>
-        )}
-      </div>
-      {points.length > 1 ? (
-        <>
-          <TvlChart points={points} breakdown={breakdown} label="Value locked in the pools we index" />
-          <p className="text-xs text-dim">
-            At the end of each UTC day, at that day&apos;s prices from our own pools: classic pools
-            rebuilt from every transfer in and out, Soroban pools from their reserves events. It
-            follows today&apos;s pools back as far as our index goes; a quiet Soroban pool joins at
-            its first reserves update.
-          </p>
-        </>
-      ) : history ? (
-        <EmptyState message="Our index doesn't have two full days to chart yet." />
-      ) : (
-        <ErrorState message="Couldn't rebuild the history from the indexer. It'll be back on the next refresh." className="py-6" />
-      )}
+      <ProtocolCharts
+        initialMetric="tvl"
+        tvl={(tvl ?? []).map((d) => ({ date: d.date, tvl: sumOf(d.tvl) }))}
+        volume={(volume ?? []).map((d) => ({ date: d.date, volume: sumOf(d.volume) }))}
+        tvlBreakdown={Object.fromEntries((tvl ?? []).map((d) => [dayKey(d.date), split(d.tvl)]))}
+        volumeBreakdown={Object.fromEntries((volume ?? []).map((d) => [dayKey(d.date), split(d.volume)]))}
+        tvlLabel="Value locked in the pools we index"
+        volumeLabel="Daily volume through the pools we index"
+        noTvlMessage={tvl ? "Our index doesn't have two full days to chart yet." : failed}
+        noVolumeMessage={volume ? "Our index doesn't have a complete day of trades yet." : failed}
+      />
+      <p className="text-xs text-dim">
+        Per UTC day at that day&apos;s prices from our own pools; hover a day to split it by
+        protocol. Value locked is at the end of the day, classic pools rebuilt from every transfer in
+        and out and Soroban pools from their reserves events; volume is every trade through the same
+        pools over the day. It follows today&apos;s pools back as far as our index goes.
+      </p>
     </Card>
   );
 }

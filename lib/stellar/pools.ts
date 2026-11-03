@@ -14,6 +14,7 @@ import {
   indexedPoolDailyTrades,
   indexedPoolTrades,
   indexedPoolsActivity,
+  indexedPoolsDailyTrades,
   type ChPool,
   type ChPoolTrades,
 } from "./indexer/pools";
@@ -27,13 +28,20 @@ import {
   indexedSorobanPools,
   indexedSorobanReserves,
 } from "./indexer/sorobanPools";
-import { classicReserveHistory, dayStart, getPriceHistory, sorobanReserveHistory } from "./poolHistory";
+import {
+  classicReserveHistory,
+  dayStart,
+  getPriceHistory,
+  sorobanReserveHistory,
+  type PriceHistory,
+} from "./poolHistory";
 import {
   anchorAssets,
   buildPriceBook,
   fromAnchorBook,
   valueByHoldings,
   valueBySide,
+  type AnchorBook,
   type PriceBook,
 } from "./prices";
 import type { TvlPoint } from "./defi";
@@ -350,8 +358,16 @@ async function loadSorobanList(): Promise<SorobanPoolInfo[]> {
 // which contracts are pools barely changes; their reserves are read live
 const cachedSorobanList = unstable_cache(loadSorobanList, ["soroban-pools"], { revalidate: 3600 });
 
-async function liveSorobanPools(book: PriceBook): Promise<{ pools: PoolSummary[]; infos: SorobanPoolInfo[] }> {
-  const infos = await cachedSorobanList();
+// unstable_cache skips its cache when called inside another one, so a cached
+// loader gets what it needs from other caches through its closure, read first
+function cachedWith<T>(load: () => Promise<T>, key: string[], revalidate: number): Promise<T> {
+  return unstable_cache(load, key, { revalidate })();
+}
+
+async function liveSorobanPools(
+  book: PriceBook,
+  infos: SorobanPoolInfo[],
+): Promise<{ pools: PoolSummary[]; infos: SorobanPoolInfo[] }> {
   const live = new Map(
     (await indexedSorobanReserves(infos.map((i) => i.id), LEDGERS_PER_DAY)).map((r) => [r.contract_id, r]),
   );
@@ -386,16 +402,18 @@ function totalsOf(pools: PoolSummary[], protocols: PoolProtocol[]): ProtocolTota
   });
 }
 
-async function loadPools(): Promise<{ top: PoolSummary[]; totals: ProtocolTotals[] }> {
+const sorobanFailed = (error: unknown) => {
+  console.warn("[indexer] soroban pools: failed", error instanceof Error ? error.message : error);
+  return null;
+};
+
+async function loadPools(infos: SorobanPoolInfo[] | null): Promise<{ top: PoolSummary[]; totals: ProtocolTotals[] }> {
   const book = buildPriceBook(await indexedPricePools());
   const ids = await indexedPoolCandidates(anchorAssets(book), CLASSIC_POOLS);
   const [classic, soroban] = await Promise.all([
     indexedLivePools(ids).then((rows) => rows.map((pool) => summarize(book, pool))),
     // a Soroban outage shouldn't take the classic pools down with it
-    liveSorobanPools(book).catch((error) => {
-      console.warn("[indexer] soroban pools: failed", error instanceof Error ? error.message : error);
-      return null;
-    }),
+    infos ? liveSorobanPools(book, infos).catch(sorobanFailed) : null,
   ]);
   const valued = [...classic, ...(soroban?.pools ?? [])]
     .filter((pool) => pool.tvlXlm !== null)
@@ -421,7 +439,10 @@ async function loadPools(): Promise<{ top: PoolSummary[]; totals: ProtocolTotals
   };
 }
 
-const cachedPools = unstable_cache(loadPools, ["pools"], { revalidate: 120 });
+async function cachedPools(): Promise<{ top: PoolSummary[]; totals: ProtocolTotals[] }> {
+  const infos = await cachedSorobanList().catch(sorobanFailed);
+  return cachedWith(() => loadPools(infos), ["pools"], 120);
+}
 
 /** The most valuable pools, classic and Soroban, live. Indexer only: null on testnet or when it failed. */
 export function getTopPools(): Promise<PoolSummary[] | null> {
@@ -448,30 +469,52 @@ export interface ProtocolDay {
   tvl: Record<PoolProtocol, number>;
 }
 
-// today's valued pools, each walked back day by day at that day's prices
-async function loadProtocolHistory(): Promise<ProtocolDay[]> {
+/** Trades per protocol over a UTC day, in USD at that day's prices. */
+export interface ProtocolVolumeDay {
+  /** Unix seconds, start of the day. */
+  date: number;
+  volume: Record<PoolProtocol, number>;
+}
+
+const byProtocol = (): Record<PoolProtocol, number> => ({ classic: 0, aquarius: 0, soroswap: 0 });
+
+// the pools valued today, the set the history follows back
+type ValuedPools = { classic: ChPool[]; soroban: SorobanPoolInfo[] };
+
+async function loadValuedPools(infos: SorobanPoolInfo[]): Promise<ValuedPools> {
   const book = buildPriceBook(await indexedPricePools());
   const ids = await indexedPoolCandidates(anchorAssets(book), CLASSIC_POOLS);
-  const [{ days, books }, live, soroban] = await Promise.all([
-    getPriceHistory(),
-    indexedLivePools(ids),
-    liveSorobanPools(book),
-  ]);
-  const classic = live.filter((pool) => summarize(book, pool).tvlXlm !== null);
+  const [live, soroban] = await Promise.all([indexedLivePools(ids), liveSorobanPools(book, infos)]);
   const valued = new Set(soroban.pools.filter((p) => p.tvlXlm !== null).map((p) => p.id));
-  const infos = soroban.infos.filter((i) => valued.has(i.id));
+  return {
+    classic: live.filter((pool) => summarize(book, pool).tvlXlm !== null),
+    soroban: soroban.infos.filter((i) => valued.has(i.id)),
+  };
+}
+
+async function cachedValuedPools(): Promise<ValuedPools> {
+  const infos = await cachedSorobanList();
+  return cachedWith(() => loadValuedPools(infos), ["valued-pools"], 3600);
+}
+
+// each valued pool walked back day by day at that day's prices, today at today's
+async function loadProtocolHistory(
+  { days, books }: PriceHistory,
+  { classic, soroban }: ValuedPools,
+): Promise<ProtocolDay[]> {
+  const book = buildPriceBook(await indexedPricePools());
   const [classicDays, sorobanDays] = await Promise.all([
     classicReserveHistory(classic, days),
-    sorobanReserveHistory(infos.map((i) => i.id), days),
+    sorobanReserveHistory(soroban.map((i) => i.id), days),
   ]);
   return days.map((day, i) => {
     const dayBook = i === days.length - 1 ? book : fromAnchorBook(books[i]);
-    const tvl: Record<PoolProtocol, number> = { classic: 0, aquarius: 0, soroswap: 0 };
+    const tvl = byProtocol();
     classic.forEach((pool, k) => {
       const r = classicDays[k][i];
       if (r) tvl.classic += summarize(dayBook, { ...pool, reserve_a: String(r[0]), reserve_b: String(r[1]) }).tvlUsd ?? 0;
     });
-    infos.forEach((info, k) => {
+    soroban.forEach((info, k) => {
       const r = sorobanDays[k][i];
       if (r) tvl[info.protocol] += summarizeSoroban(dayBook, info, r, false)?.tvlUsd ?? 0;
     });
@@ -479,14 +522,77 @@ async function loadProtocolHistory(): Promise<ProtocolDay[]> {
   });
 }
 
-const cachedProtocolHistory = unstable_cache(loadProtocolHistory, ["protocol-history"], { revalidate: 3600 });
-
 /**
  * Value locked per protocol at the end of each day we can rebuild. Mainnet
  * facts shown on every network; null when the indexer is off or failed.
  */
 export function getProtocolTvlHistory(): Promise<ProtocolDay[] | null> {
-  return withIndexer<ProtocolDay[] | null>("protocol tvl history", cachedProtocolHistory, async () => null, {
+  return withIndexer<ProtocolDay[] | null>(
+    "protocol tvl history",
+    async () => {
+      const [prices, valued] = await Promise.all([getPriceHistory(), cachedValuedPools()]);
+      return cachedWith(() => loadProtocolHistory(prices, valued), ["protocol-history"], 3600);
+    },
+    async () => null,
+    { anyNetwork: true },
+  );
+}
+
+// one complete day of trades through the valued pools, at that day's prices
+async function loadDayVolume(
+  { classic, soroban }: ValuedPools,
+  prices: AnchorBook,
+  day: string,
+): Promise<Record<PoolProtocol, number>> {
+  const book = fromAnchorBook(prices);
+  const [classicRows, sorobanRows] = await Promise.all([
+    indexedPoolsDailyTrades(classic.map((p) => addressOf(p.pool_id)), day, day),
+    indexedPoolsDailyTrades(soroban.map((info) => info.id), day, day, tokensByPool(soroban)),
+  ]);
+  const protocolOf = new Map(soroban.map((info) => [info.id, info.protocol]));
+  const volume = byProtocol();
+  for (const row of classicRows) volume.classic += tradeValueUsd(book, row) ?? 0;
+  for (const row of sorobanRows) {
+    const protocol = protocolOf.get(row.pool);
+    if (protocol) volume[protocol] += tradeValueUsd(book, row) ?? 0;
+  }
+  return volume;
+}
+
+// a day not read yet takes about a second, so after a deploy the oldest days
+// fill in over a few refreshes instead of holding one page up
+const VOLUME_BUDGET_MS = 8_000;
+
+async function loadProtocolVolume(): Promise<ProtocolVolumeDay[]> {
+  const [{ days, books }, valued] = await Promise.all([getPriceHistory(), cachedValuedPools()]);
+  const started = Date.now();
+  const out: ProtocolVolumeDay[] = [];
+  // newest first, one at a time: days running side by side slow each other
+  // down. Today is still trading, and a past day's trades don't change
+  for (let i = days.length - 2; i >= 0 && Date.now() - started < VOLUME_BUDGET_MS; i--) {
+    try {
+      const volume = await cachedWith(
+        () => loadDayVolume(valued, books[i], days[i]),
+        ["pool-day-volume", days[i]],
+        7 * 86_400,
+      );
+      out.unshift({ date: dayStart(days[i]), volume });
+    } catch (error) {
+      // the days read so far still chart; the rest come on a later refresh
+      if (!out.length) throw error;
+      console.warn(`[indexer] volume for ${days[i]}: failed`, error instanceof Error ? error.message : error);
+      break;
+    }
+  }
+  return out;
+}
+
+/**
+ * Trade volume per protocol for each complete day we can rebuild. Mainnet
+ * facts shown on every network; null when the indexer is off or failed.
+ */
+export function getProtocolVolumeHistory(): Promise<ProtocolVolumeDay[] | null> {
+  return withIndexer<ProtocolVolumeDay[] | null>("protocol volume history", loadProtocolVolume, async () => null, {
     anyNetwork: true,
   });
 }
