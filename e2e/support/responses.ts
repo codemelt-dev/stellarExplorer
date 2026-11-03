@@ -325,6 +325,16 @@ export function responseFor(
         /^\/(tvl|protocol|summary\/dexs)\/[a-z0-9-]+$/.test(url.pathname))
     )
       return unavailable();
+    // protocol logos on the DeFi pages: a plain circle stands in
+    if (
+      url.origin === "https://icons.llamao.fi" &&
+      /^\/icons\/protocols\/[a-z0-9-]+$/.test(url.pathname)
+    )
+      return {
+        status: 200,
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="#888"/></svg>',
+      };
   }
   throw new Error(`Unhandled fixture request: ${method} ${url.href}`);
 }
