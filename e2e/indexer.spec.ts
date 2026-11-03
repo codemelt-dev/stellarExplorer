@@ -184,6 +184,28 @@ test("the DeFi overview adds up our pools by protocol next to DefiLlama", async 
   await expect(main.getByText(/Couldn't reach DefiLlama, so its columns are empty/)).toBeVisible();
 });
 
+test("analytics charts the network's complete days from the indexer", async ({ page }) => {
+  await page.goto("/analytics");
+  const main = page.getByRole("main");
+
+  await expect(main.getByRole("heading", { name: "Analytics", exact: true })).toBeVisible();
+  // the latest day was a fifth busier on every count than the one before
+  await expect(main.getByText("+20.0% vs 7-day average", { exact: true })).toHaveCount(6);
+  await expect(
+    main.getByRole("img", { name: "Transactions per day over the last 2 days, latest 6.0M" }),
+  ).toBeVisible();
+  await expect(main.getByRole("img", { name: "Fees per day over the last 2 days, latest 4.8K XLM" })).toBeVisible();
+  await expect(main.getByText("Manage sell offer", { exact: true })).toBeVisible();
+  await expect(main.getByText("46.0%", { exact: true })).toBeVisible();
+
+  const top = main.getByRole("region", { name: "Most called contracts" });
+  await expect(top.getByText("1.2K", { exact: true })).toBeVisible();
+  await expect(top.getByText("34", { exact: true })).toBeVisible();
+
+  await main.getByText("Daily numbers", { exact: true }).click();
+  await expect(main.getByRole("cell", { name: "6,000,000", exact: true })).toBeVisible();
+});
+
 test("an unindexed mainnet asset falls back to Horizon's missing-record result", async ({
   page,
 }) => {

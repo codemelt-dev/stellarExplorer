@@ -143,3 +143,32 @@ export const indexedAssetContracts = [
   { contract_id: MAINNET_XLM_CONTRACT, asset: "native" },
   { contract_id: PRICE_USDC_CONTRACT, asset: PRICE_USDC },
 ];
+
+// the network's last two complete days, the second one busier
+const utcDayAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+const networkDay = (daysAgo: number, scale: number) => ({
+  day: utcDayAgo(daysAgo),
+  transactions: String(5_000_000 * scale),
+  failed_transactions: String(1_500_000 * scale),
+  soroban_transactions: String(1_400_000 * scale),
+  operations: String(10_000_000 * scale),
+  operations_by_type: {
+    payment: String(4_000_000 * scale),
+    manage_sell_offer: String(4_600_000 * scale),
+    invoke_host_function: String(1_400_000 * scale),
+  },
+  active_accounts: String(150_000 * scale),
+  // 4,000 XLM, 3,600 of it paid by Soroban transactions
+  fees_charged: String(40_000_000_000 * scale),
+  new_accounts: String(20_000 * scale),
+  new_contracts: String(150 * scale),
+  contract_calls: String(1_400_000 * scale),
+  token_transfers: String(7_000_000 * scale),
+});
+export const indexedNetworkDays = [networkDay(2, 1), networkDay(1, 1.2)];
+export const indexedSorobanFees = indexedNetworkDays.map((d) => ({
+  day: d.day,
+  fees: String(Number(d.fees_charged) * 0.9),
+}));
+// the pair is also the most called contract of the week
+export const indexedTopContracts = [{ contract_id: SOROSWAP_PAIR, calls: "1200", callers: "34" }];

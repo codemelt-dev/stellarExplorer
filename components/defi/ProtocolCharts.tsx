@@ -5,7 +5,7 @@ import { TvlChart } from "./TvlChart";
 import { VolumeChart } from "./VolumeChart";
 import { EmptyState } from "@/components/states/EmptyState";
 import type { TvlPoint } from "@/lib/stellar/defi";
-import { cn } from "@/lib/utils";
+import { Segmented } from "@/components/layout/Segmented";
 
 type Metric = "tvl" | "volume";
 const RANGES = [7, 30, 90] as const;
@@ -68,37 +68,6 @@ export function ProtocolCharts({
           <EmptyState message={noVolumeMessage} />
         )}
       </div>
-    </div>
-  );
-}
-
-function Segmented({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: Array<{ id: string; label: string }>;
-  value: string;
-  onChange: (id: string) => void;
-}) {
-  return (
-    <div role="group" aria-label={label} className="flex rounded-md border border-border p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          aria-pressed={o.id === value}
-          onClick={() => onChange(o.id)}
-          className={cn(
-            "rounded px-2 py-0.5 text-xs transition-colors duration-150",
-            o.id === value ? "bg-surface-2 text-foreground" : "text-dim hover:text-foreground",
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
     </div>
   );
 }

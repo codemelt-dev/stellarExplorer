@@ -21,6 +21,9 @@ import {
   indexedSoroswapReserves,
   indexedSoroswapTokens,
   indexedXlmUsdcPool,
+  indexedNetworkDays,
+  indexedSorobanFees,
+  indexedTopContracts,
 } from "../fixtures/indexer";
 
 export type RequestHeaders = Record<string, string | string[] | undefined>;
@@ -125,6 +128,12 @@ function clickhouseResponse(
     rows = indexedAssetContracts;
   } else if (body.includes("SELECT count() AS events FROM events")) {
     rows = [{ events: "120" }];
+  } else if (body.includes("FROM daily_stats") && body.includes("operations_by_type")) {
+    rows = indexedNetworkDays;
+  } else if (body.includes("sumIf(fee_charged, soroban)")) {
+    rows = indexedSorobanFees;
+  } else if (body.includes("FROM contract_calls") && body.includes("uniq(caller)")) {
+    rows = indexedTopContracts;
   } else if (body.includes("AS day FROM ledgers")) {
     // the indexer holds yesterday and today, so pool history has two days
     rows = [utcDay(-1), utcDay(0)].map((day) => ({ day }));
@@ -225,6 +234,10 @@ function apiResponse(url: URL, method: string, headers: RequestHeaders) {
     throw new Error(`Unexpected price-pool query: ${url.search}`);
   }
 
+  if (url.pathname === "/contracts" && url.searchParams.get("contract_id")?.startsWith("in.(")) {
+    // nothing known about the most called contracts: they show by address
+    return { status: 200, body: [] };
+  }
   if (url.pathname === "/ledgers") {
     if (
       url.searchParams.get("select") !==

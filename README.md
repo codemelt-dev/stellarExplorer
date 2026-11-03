@@ -37,9 +37,10 @@ One exception to that path: on testnet, or when the indexer fails, the browser s
 | Assets | `/asset/[id]`, `/assets` | supply, holders, price, a holder map (top 100 as bubbles by share of supply, clustered by transfers between them in the last 90 days) and top holders; a ranked asset directory |
 | Ledgers | `/ledger/[sequence]`, `/ledgers` | close metadata, transactions, previous and next ledger |
 | DeFi | `/defi`, `/defi/[slug]` | an overview with value locked, 24h volume and fees across the classic AMM, Aquarius and Soroswap, computed from our indexer, value locked per day by protocol, and DefiLlama per protocol with the gap between the two; per-protocol TVL and volume; recent trades on the Stellar DEX page; on Aquarius and Soroswap, our own totals and the latest swaps, deposits and withdrawals across their pools |
+| Analytics | `/analytics` | the network per complete UTC day from our indexer: transactions (classic and Soroban), failure rate, operations and their types, active and new accounts, fees (classic and Soroban), contract calls, new contracts and token transfers over 7, 30 or 90 days, the latest day against its 7-day average, the most called contracts of the week, and every number in a table |
 | Search | `/search` | `G`/`M`/`C` addresses, transaction hashes, ledger numbers, asset codes and federation addresses (`name*domain`, resolved in the browser through the domain's `stellar.toml`) |
 
-The site opens on mainnet. The header switches to testnet and back, and connects a wallet read-only (Freighter, xBull). Analytics is a placeholder page until the indexer's full history lands.
+The site opens on mainnet. The header switches to testnet and back, and connects a wallet read-only (Freighter, xBull). Analytics starts where the indexer does (6 October 2026) and reaches further back as its history backfill lands.
 
 The humanizer covers all 27 operation types (24 classic, plus `invoke_host_function`, `extend_footprint_ttl` and `restore_footprint`), with a safe fallback for anything unknown. Amounts stay `bigint` from the wire to the screen; no stroop math runs in floating point.
 
