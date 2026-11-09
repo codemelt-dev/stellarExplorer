@@ -51,6 +51,20 @@ export async function indexedAsset(asset: string): Promise<IndexedAsset | null> 
   return row ? toAsset(row) : null;
 }
 
+export interface IndexedToken extends IndexedAsset {
+  /** False when the token is older than the index: its balances count only transfers since go-live. */
+  complete: boolean;
+}
+
+/** A Soroban-only token, built from its transfers. */
+export async function indexedToken(contractId: string): Promise<IndexedToken | null> {
+  const [row] = await chQuery<ChAsset & { complete: boolean | number }>(
+    `SELECT asset, holders, supply, complete FROM assets WHERE asset = {asset:String}`,
+    { asset: contractId },
+  );
+  return row ? { ...toAsset(row), complete: Boolean(row.complete) } : null;
+}
+
 export interface IndexedHolder {
   rank: number;
   holder: string;

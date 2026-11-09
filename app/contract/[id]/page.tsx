@@ -14,6 +14,7 @@ import { Time } from "@/components/stellar/Time";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
 import { PagedList } from "@/components/layout/PagedList";
+import { HolderSections } from "@/components/asset/HolderSections";
 import { activeNetwork } from "@/lib/stellar/network";
 import {
   getContractCreation,
@@ -23,6 +24,10 @@ import {
   getContractSummary,
 } from "@/lib/stellar/contracts";
 import { contractAsset, tokenMetadata } from "@/lib/stellar/contractDecode";
+import { getToken, getTopHolders } from "@/lib/stellar/assets";
+import { assetHref } from "@/lib/stellar/assetId";
+import { unitsToDecimal } from "@/lib/stellar/amount";
+import { compactNumber } from "@/lib/format";
 import type { DecodedValue } from "@/lib/stellar/xdrDecode";
 import { truncateKey } from "@/lib/stellar/strkey";
 
@@ -49,14 +54,16 @@ export default async function ContractPage({
   const network = await activeNetwork();
   const netLabel = network.label.toLowerCase();
 
-  let summary, iface, events, creation, storage;
+  let summary, iface, events, creation, storage, token;
   try {
-    [summary, iface, events, creation, storage] = await Promise.all([
+    [summary, iface, events, creation, storage, token] = await Promise.all([
       getContractSummary(id),
       getContractInterface(id),
       getContractEvents(id),
       getContractCreation(id),
       getContractStorage(id, after),
+      // a Soroban-only token the indexer counts from its transfers, mainnet only
+      getToken(id),
     ]);
   } catch {
     return (
@@ -82,6 +89,15 @@ export default async function ContractPage({
   const asset = contractAsset(summary, network.passphrase);
   // any other token: the symbol and decimals it reports about itself
   const ownToken = asset ? undefined : tokenMetadata(summary);
+  // a Stellar asset's holders are counted under the asset itself
+  const tokenStats = asset ? null : token;
+  const holders = tokenStats ? await getTopHolders({ kind: "contract", contractId: id }) : null;
+  // a token that doesn't say its decimals shows raw units
+  const decimals = ownToken?.decimals ?? 0;
+  const symbol = ownToken?.symbol ?? "units";
+  // older than our index, the supply can't be counted
+  const supply =
+    tokenStats?.complete && BigInt(tokenStats.supply) > 0n ? BigInt(tokenStats.supply) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -119,6 +135,13 @@ export default async function ContractPage({
               ) : (
                 "The network's native asset"
               )}
+              <span aria-hidden="true">·</span>
+              <Link
+                href={assetHref(asset.issuer ? { kind: "issued", code: asset.code, issuer: asset.issuer } : { kind: "native", code: "XLM" })}
+                className="text-gold underline-offset-4 hover:underline"
+              >
+                Holders and supply
+              </Link>
             </div>
           )}
         </div>
@@ -191,6 +214,28 @@ export default async function ContractPage({
             </span>
           </div>
         )}
+        {tokenStats && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs uppercase tracking-wider text-dim">
+              Holders
+            </span>
+            <span className="text-sm tabular-nums">
+              {tokenStats.holders.toLocaleString("en-US")}
+              {!tokenStats.complete && <span className="text-dim"> · since 6 Oct</span>}
+            </span>
+          </div>
+        )}
+        {tokenStats && supply !== null && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs uppercase tracking-wider text-dim">
+              Supply
+            </span>
+            <span className="text-sm tabular-nums">
+              {compactNumber(Number(unitsToDecimal(supply, decimals)))}{" "}
+              <span className="font-mono">{symbol}</span>
+            </span>
+          </div>
+        )}
         {creation && (
           <>
             <div className="flex flex-col gap-1">
@@ -210,6 +255,30 @@ export default async function ContractPage({
           </>
         )}
       </Card>
+
+      {tokenStats && (
+        <>
+          {(!tokenStats.complete || !ownToken) && (
+            <Card className="flex-row flex-wrap items-center gap-x-3 gap-y-1 p-4 text-sm">
+              <span className="text-xs uppercase tracking-wider text-dim">Best effort</span>
+              <span className="text-dim">
+                {!tokenStats.complete &&
+                  "This token is older than our index, which starts on 6 October 2026, so balances count only its transfers since then. Shares of the supply show once the history backfill lands. "}
+                {!ownToken &&
+                  "The contract doesn't publish its symbol or decimals, so balances are in raw units."}
+              </span>
+            </Card>
+          )}
+          <HolderSections
+            identity={{ kind: "contract", contractId: id }}
+            holders={holders}
+            supply={supply}
+            code={symbol}
+            decimals={decimals}
+            netLabel={netLabel}
+          />
+        </>
+      )}
 
       {/* paging through storage reloads the page, stay on that tab */}
       <Tabs defaultValue={after ? "storage" : "events"}>

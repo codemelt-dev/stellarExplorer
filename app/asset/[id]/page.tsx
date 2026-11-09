@@ -1,28 +1,16 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { Coins, DollarSign, Globe, PieChart, SearchX, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { HolderBubbleMap } from "@/components/asset/HolderBubbleMap";
+import { HolderSections, percent } from "@/components/asset/HolderSections";
 import { Address } from "@/components/stellar/Address";
-import { Amount } from "@/components/stellar/Amount";
 import { Identicon } from "@/components/stellar/Identicon";
 import { StellarMark } from "@/components/stellar/StellarMark";
 import { StatTile } from "@/components/stats/StatTile";
-import { PagedList } from "@/components/layout/PagedList";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
 import { getAccount } from "@/lib/stellar/accounts";
-import {
-  assetContractId,
-  getAsset,
-  getHolderLinks,
-  getTopHolders,
-  HOLDER_LINK_DAYS,
-  type AssetHolder,
-} from "@/lib/stellar/assets";
-import type { MapHolder } from "@/lib/stellar/holderMap";
+import { assetContractId, getAsset, getTopHolders } from "@/lib/stellar/assets";
 import { parseAssetId, type AssetIdentity } from "@/lib/stellar/assetId";
 import { formatAmount, stroopsToLumens } from "@/lib/stellar/amount";
 import { getContractSummary } from "@/lib/stellar/contracts";
@@ -72,14 +60,6 @@ function priceCaption(price: AssetPrice | null, native: boolean, netLabel: strin
   if (price.source === "usdc pool") return `${xlm}, from a USDC pool of ${depth}`;
   return `${xlm}, order book mid`;
 }
-
-function percent(part: bigint, whole: bigint): number | null {
-  if (whole <= 0n) return null;
-  return Number((part * 1_000_000n) / whole) / 10_000;
-}
-
-const holderGrid =
-  "grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-4 sm:grid-cols-[2.5rem_minmax(0,1fr)_auto_9rem]";
 
 export default async function AssetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -214,79 +194,15 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
         </Card>
       )}
 
-      {holders && holders.length > 1 && (
-        <section id="holder-map" className="flex scroll-mt-24 flex-col gap-3">
-          <h2 className="text-lg font-semibold">Holder map</h2>
-          <Card className="p-4 sm:p-5">
-            <Suspense fallback={<HolderMapSkeleton />}>
-              <HolderMap identity={identity} holders={holders} supply={supply} />
-            </Suspense>
-          </Card>
-        </section>
-      )}
-
-      <section id="holders" className="flex scroll-mt-24 flex-col gap-3">
-        <h2 className="text-lg font-semibold">Top holders</h2>
-        <Card className="gap-3 p-5">
-          {holders === null ? (
-            <EmptyState
-              message={`The holder ranking is built by the indexer, which covers mainnet only. It isn't available on ${netLabel}.`}
-            />
-          ) : holders.length === 0 ? (
-            <EmptyState message="No holders ranked yet. The ranking is rebuilt once a day." />
-          ) : (
-            <>
-              <div
-                className={`${holderGrid} border-b border-border pb-2 text-xs font-medium uppercase tracking-wider text-dim`}
-              >
-                <span>#</span>
-                <span>Holder</span>
-                <span className="text-right">Balance</span>
-                <span className="hidden text-right sm:block">Share</span>
-              </div>
-              <PagedList topId="holders" className="flex flex-col">
-                {holders.map((holder) => (
-                  <HolderRow key={holder.rank} holder={holder} supply={supply} code={identity.code} />
-                ))}
-              </PagedList>
-            </>
-          )}
-        </Card>
-      </section>
-    </div>
-  );
-}
-
-// waits on the transfers between holders, a few seconds on the busiest assets
-async function HolderMap({
-  identity,
-  holders,
-  supply,
-}: {
-  identity: AssetIdentity & { kind: "native" | "issued" };
-  holders: AssetHolder[];
-  supply: bigint;
-}) {
-  const shown = holders.slice(0, 100);
-  const links = await getHolderLinks(identity, shown.map((h) => h.holder));
-  const issuer = identity.kind === "issued" ? identity.issuer : null;
-  const mapHolders: MapHolder[] = shown.map((h) => ({
-    rank: h.rank,
-    holder: h.holder,
-    balance: h.balance,
-    share: percent(BigInt(h.balance), supply),
-    label: h.holder === issuer ? "issuer" : h.holder.startsWith("C") ? "contract" : undefined,
-  }));
-  return (
-    <HolderBubbleMap holders={mapHolders} links={links} code={identity.code} days={HOLDER_LINK_DAYS} />
-  );
-}
-
-function HolderMapSkeleton() {
-  return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
-      <Skeleton className="aspect-square w-full rounded-lg" />
-      <Skeleton className="h-[26rem] w-full rounded-lg lg:h-auto" />
+      <HolderSections
+        identity={identity}
+        holders={holders}
+        supply={supply}
+        code={identity.code}
+        decimals={7}
+        issuer={identity.kind === "issued" ? identity.issuer : null}
+        netLabel={netLabel}
+      />
     </div>
   );
 }
@@ -305,43 +221,5 @@ function AssetIcon({ identity }: { identity: AssetIdentity }) {
     <span className="mt-1 flex size-11 shrink-0 items-center justify-center rounded-md bg-surface">
       <StellarMark className="size-6" />
     </span>
-  );
-}
-
-function HolderRow({
-  holder,
-  supply,
-  code,
-}: {
-  holder: AssetHolder;
-  supply: bigint;
-  code: string;
-}) {
-  const share = percent(BigInt(holder.balance), supply);
-  return (
-    <div className={`${holderGrid} h-11 border-b border-border last:border-b-0`}>
-      <span className="text-sm text-dim tabular-nums">{holder.rank}</span>
-      <span className="min-w-0 truncate">
-        <Address address={holder.holder} chars={6} />
-      </span>
-      <span className="text-right">
-        <Amount amount={stroopsToLumens(holder.balance)} assetCode={code} maxDecimals={2} />
-      </span>
-      <span className="hidden items-center justify-end gap-2 sm:flex">
-        {share !== null && (
-          <>
-            <span className="h-1 w-14 overflow-hidden rounded-full bg-surface-2" aria-hidden="true">
-              <span
-                className="block h-full rounded-full bg-dim"
-                style={{ width: `${Math.min(share, 100)}%` }}
-              />
-            </span>
-            <span className="w-14 text-right font-mono text-xs tabular-nums">
-              {share < 0.01 ? "<0.01" : share.toFixed(2)}%
-            </span>
-          </>
-        )}
-      </span>
-    </div>
   );
 }

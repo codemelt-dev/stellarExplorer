@@ -8,23 +8,25 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { clustersOf, layoutHolders, type MapHolder, type MapLink } from "@/lib/stellar/holderMap";
 import { truncateKey } from "@/lib/stellar/strkey";
 import { cn } from "@/lib/utils";
-import { HolderMapCanvas, clusterColor, hrefOf, shareText } from "./HolderMapCanvas";
+import { HolderMapCanvas, clusterColor, compactBalance, hrefOf, shareText } from "./HolderMapCanvas";
 
 const noSubscribe = () => () => {};
 
-// The top holders as bubbles sized by their share of the supply. Holders that
-// moved the asset between each other are joined and colored as one cluster.
-// The layout runs in the browser only, after hydration
+// The top holders as bubbles sized by their balance. Holders that moved the
+// asset between each other are joined and colored as one cluster. The layout
+// runs in the browser only, after hydration
 export function HolderBubbleMap({
   holders,
   links,
   code,
+  decimals = 7,
   days,
 }: {
   holders: MapHolder[];
   /** Null when the links couldn't be loaded. */
   links: MapLink[] | null;
   code: string;
+  decimals?: number;
   days: number;
 }) {
   const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
@@ -38,6 +40,8 @@ export function HolderBubbleMap({
     [mounted, visible, links],
   );
   const clusteredShare = clusters.reduce((sum, c) => sum + c.share, 0);
+  // no shares when the supply isn't known, the list shows balances instead
+  const shares = holders.some((h) => h.share !== null);
 
   function toggle(holder: string) {
     setHidden((was) => {
@@ -70,15 +74,16 @@ export function HolderBubbleMap({
             active={active}
             onActive={setActive}
             code={code}
-            label={`Top ${visible.length} holders of ${code} as bubbles sized by their share of the supply`}
+            decimals={decimals}
+            label={`Top ${visible.length} holders of ${code} as bubbles sized by their ${shares ? "share of the supply" : "balance"}`}
           />
         )}
         <p className="text-xs text-dim">
-          Bubble size is the share of the supply.{" "}
+          {shares ? "Bubble size is the share of the supply." : "Bubble size is the balance."}{" "}
           {links === null
             ? "Transfers between holders couldn't be loaded right now."
             : clusters.length
-              ? `Lines join holders that moved ${code} between each other in the last ${days} days; each color is a cluster. ${clusters.length === 1 ? "1 cluster holds" : `${clusters.length} clusters hold`} ${clusteredShare.toFixed(2)}% of the supply.`
+              ? `Lines join holders that moved ${code} between each other in the last ${days} days; each color is a cluster.${shares ? ` ${clusters.length === 1 ? "1 cluster holds" : `${clusters.length} clusters hold`} ${clusteredShare.toFixed(2)}% of the supply.` : ""}`
               : `None of these holders moved ${code} between each other in the last ${days} days.`}{" "}
           Dashed bubbles are contracts. Pinch or ctrl + scroll to zoom, drag to move; bubbles show
           more as they grow.
@@ -98,7 +103,7 @@ export function HolderBubbleMap({
                 Show all ({hidden.size} hidden)
               </button>
             ) : (
-              <span>Share</span>
+              <span>{shares ? "Share" : "Balance"}</span>
             )}
           </div>
           {holders.map((h) => {
@@ -138,7 +143,9 @@ export function HolderBubbleMap({
                   {h.label && <span className="mr-1.5 font-sans text-dim">{h.label}</span>}
                   {truncateKey(h.holder, 5)}
                 </Link>
-                <span className="shrink-0 font-mono text-xs tabular-nums">{shareText(h.share)}</span>
+                <span className="shrink-0 font-mono text-xs tabular-nums">
+                  {shares ? shareText(h.share) : compactBalance(h.balance, decimals)}
+                </span>
               </div>
             );
           })}

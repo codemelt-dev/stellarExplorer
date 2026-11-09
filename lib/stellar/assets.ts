@@ -14,6 +14,7 @@ import {
   indexedAssets,
   indexedHolderLinks,
   indexedListedAssets,
+  indexedToken,
   indexedTokenActivity,
   indexedTopHolders,
   indexedXlmPrice,
@@ -156,6 +157,11 @@ export type { IndexedHolder as AssetHolder };
 export const getTopHolders = cache(
   (identity: AssetIdentity, limit = 100): Promise<IndexedHolder[] | null> =>
     indexerRead("top holders", () => indexedTopHolders(assetKey(identity), limit)),
+);
+
+/** Holders and supply of a Soroban-only token, indexer only. Null when off, failed or not indexed. */
+export const getToken = cache((contractId: string) =>
+  indexerRead("token", () => indexedToken(contractId)),
 );
 
 export type { IndexedHolderLink as HolderLink };
