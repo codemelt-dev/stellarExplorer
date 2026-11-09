@@ -68,6 +68,42 @@ export async function indexedTopHolders(asset: string, limit: number): Promise<I
   return rows.map((r) => ({ rank: Number(r.rank), holder: r.holder, balance: String(r.balance) }));
 }
 
+export interface IndexedHolderLink {
+  /** The two holders, in address order. */
+  a: string;
+  b: string;
+  /** Transfers between them, either way. */
+  transfers: number;
+}
+
+const HOLDER_KEY = /^[GC][A-Z2-7]{55}$/;
+
+/**
+ * Pairs of the given holders that moved the asset between each other in the
+ * last `days`. Each transfer is stored once per side, so it is counted by its
+ * position, not by row.
+ */
+export async function indexedHolderLinks(
+  asset: string,
+  holders: string[],
+  days: number,
+): Promise<IndexedHolderLink[]> {
+  const keys = holders.filter((h) => HOLDER_KEY.test(h));
+  if (keys.length < 2) return [];
+  const rows = await chQuery<{ a: string; b: string; transfers: string | number }>(
+    `WITH (SELECT max(sequence) FROM ledgers) AS tip
+     SELECT least(account, counterparty) AS a, greatest(account, counterparty) AS b,
+            uniqExact(ledger_sequence, tx_index, op_index, position) AS transfers
+     FROM transfers_by_account
+     WHERE account IN {holders:Array(String)} AND has({holders:Array(String)}, counterparty)
+       AND account != counterparty AND asset = {asset:String} AND kind = 'transfer'
+       AND ledger_sequence > tip - {days:UInt32} * {perDay:UInt32}
+     GROUP BY a, b`,
+    { holders: `[${keys.map((h) => `'${h}'`).join(",")}]`, asset, days, perDay: LEDGERS_PER_DAY },
+  );
+  return rows.map((r) => ({ a: r.a, b: r.b, transfers: Number(r.transfers) }));
+}
+
 export interface IndexedListedAsset {
   code: string;
   issuer: string;

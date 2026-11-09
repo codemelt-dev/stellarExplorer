@@ -19,3 +19,9 @@ export function formatPrice(n: number): string {
   if (n >= 1) return `$${n.toFixed(2)}`;
   return `$${n.toPrecision(3)}`;
 }
+
+// how far one figure is from another, as "+4.1%" or "-12.0%"
+export function percentGap(ours: number, theirs: number): string {
+  const gap = (ours - theirs) / theirs;
+  return `${gap >= 0 ? "+" : "-"}${Math.abs(gap * 100).toFixed(1)}%`;
+}

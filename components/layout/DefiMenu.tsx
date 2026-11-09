@@ -48,7 +48,7 @@ export function DefiMenu({
         </div>
         <DropdownMenuSeparator className="my-2" />
         <DropdownMenuItem asChild className="gap-2 px-2.5 py-2 text-sm text-dim">
-          <Link href="/#defi">
+          <Link href="/defi">
             <LayoutGrid className="size-4" aria-hidden="true" />
             DeFi overview
           </Link>

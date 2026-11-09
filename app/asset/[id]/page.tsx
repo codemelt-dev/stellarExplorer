@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
-import { Coins, Globe, PieChart, SearchX, Users } from "lucide-react";
+import { Suspense } from "react";
+import { Coins, DollarSign, Globe, PieChart, SearchX, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { HolderBubbleMap } from "@/components/asset/HolderBubbleMap";
 import { Address } from "@/components/stellar/Address";
 import { Amount } from "@/components/stellar/Amount";
 import { Identicon } from "@/components/stellar/Identicon";
@@ -14,16 +17,20 @@ import { getAccount } from "@/lib/stellar/accounts";
 import {
   assetContractId,
   getAsset,
+  getHolderLinks,
   getTopHolders,
+  HOLDER_LINK_DAYS,
   type AssetHolder,
 } from "@/lib/stellar/assets";
+import type { MapHolder } from "@/lib/stellar/holderMap";
 import { parseAssetId, type AssetIdentity } from "@/lib/stellar/assetId";
 import { formatAmount, stroopsToLumens } from "@/lib/stellar/amount";
 import { getContractSummary } from "@/lib/stellar/contracts";
 import { activeNetwork } from "@/lib/stellar/network";
 import { fetchTomlOrgInfo } from "@/lib/stellar/toml";
 import { NotFoundError } from "@/lib/stellar/transactions";
-import { compactNumber } from "@/lib/format";
+import { compactNumber, formatPrice } from "@/lib/format";
+import { getAssetPrice, type AssetPrice } from "@/lib/stellar/pricing";
 
 export async function generateMetadata({
   params,
@@ -42,6 +49,28 @@ async function quiet<T>(work: Promise<T>): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+function xlmAmount(n: number): string {
+  if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  if (n >= 1) return n.toLocaleString("en-US", { maximumFractionDigits: 4 });
+  return n.toPrecision(4);
+}
+
+function priceValue(price: AssetPrice | null, code: string): string {
+  if (!price) return "–";
+  if (price.usd !== null) return formatPrice(price.usd);
+  return code === "XLM" ? "–" : `${xlmAmount(price.xlm)} XLM`;
+}
+
+function priceCaption(price: AssetPrice | null, native: boolean, netLabel: string): string {
+  if (!price) return netLabel === "mainnet" ? "no pool or order book prices it" : "mainnet only";
+  const depth = price.depthXlm === null ? "" : `${compactNumber(price.depthXlm)} XLM`;
+  if (native) return `from the XLM / USDC pool of ${depth}`;
+  const xlm = `${xlmAmount(price.xlm)} XLM`;
+  if (price.source === "xlm pool") return `${xlm} in a pool of ${depth}`;
+  if (price.source === "usdc pool") return `${xlm}, from a USDC pool of ${depth}`;
+  return `${xlm}, order book mid`;
 }
 
 function percent(part: bigint, whole: bigint): number | null {
@@ -94,10 +123,11 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
   }
 
   const contractId = assetContractId(identity, network.passphrase);
-  const [holders, issuer, contract] = await Promise.all([
+  const [holders, issuer, contract, price] = await Promise.all([
     getTopHolders(identity),
     identity.kind === "issued" ? quiet(getAccount(identity.issuer)) : null,
     contractId ? quiet(getContractSummary(contractId)) : null,
+    getAssetPrice(identity),
   ]);
   const toml = issuer?.home_domain ? await fetchTomlOrgInfo(issuer.home_domain) : null;
 
@@ -146,7 +176,14 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile
+          label="Price"
+          info="From our own liquidity pools: the deepest pool against XLM (or Circle USDC), with XLM priced from the XLM / USDC pool. Pools holding under 1,000 XLM aren't used; without one, the order book's mid price."
+          value={priceValue(price, identity.code)}
+          caption={priceCaption(price, identity.kind === "native", netLabel)}
+          icon={DollarSign}
+        />
         <StatTile
           label="Holders"
           info="Accounts that hold this asset."
@@ -177,6 +214,17 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
         </Card>
       )}
 
+      {holders && holders.length > 1 && (
+        <section id="holder-map" className="flex scroll-mt-24 flex-col gap-3">
+          <h2 className="text-lg font-semibold">Holder map</h2>
+          <Card className="p-4 sm:p-5">
+            <Suspense fallback={<HolderMapSkeleton />}>
+              <HolderMap identity={identity} holders={holders} supply={supply} />
+            </Suspense>
+          </Card>
+        </section>
+      )}
+
       <section id="holders" className="flex scroll-mt-24 flex-col gap-3">
         <h2 className="text-lg font-semibold">Top holders</h2>
         <Card className="gap-3 p-5">
@@ -205,6 +253,40 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
           )}
         </Card>
       </section>
+    </div>
+  );
+}
+
+// waits on the transfers between holders, a few seconds on the busiest assets
+async function HolderMap({
+  identity,
+  holders,
+  supply,
+}: {
+  identity: AssetIdentity & { kind: "native" | "issued" };
+  holders: AssetHolder[];
+  supply: bigint;
+}) {
+  const shown = holders.slice(0, 100);
+  const links = await getHolderLinks(identity, shown.map((h) => h.holder));
+  const issuer = identity.kind === "issued" ? identity.issuer : null;
+  const mapHolders: MapHolder[] = shown.map((h) => ({
+    rank: h.rank,
+    holder: h.holder,
+    balance: h.balance,
+    share: percent(BigInt(h.balance), supply),
+    label: h.holder === issuer ? "issuer" : h.holder.startsWith("C") ? "contract" : undefined,
+  }));
+  return (
+    <HolderBubbleMap holders={mapHolders} links={links} code={identity.code} days={HOLDER_LINK_DAYS} />
+  );
+}
+
+function HolderMapSkeleton() {
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
+      <Skeleton className="aspect-square w-full rounded-lg" />
+      <Skeleton className="h-[26rem] w-full rounded-lg lg:h-auto" />
     </div>
   );
 }
