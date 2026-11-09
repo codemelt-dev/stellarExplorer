@@ -32,13 +32,15 @@ One exception to that path: on testnet, or when the indexer fails, the browser s
 | Home | `/` | search, live ledger pulse, headline stats with XLM market data, per-ledger activity chart, recent ledgers, live operations feed, DeFi overview with top tokens, network growth (new accounts and assets per day) |
 | Transactions | `/tx/[hash]`, `/transactions` | success or failure with the decoded reason, every operation as a sentence, Soroban arguments, return values and events, balance changes, fee bumps, raw XDR per operation; the list filters by operation type |
 | Accounts | `/account/[id]` | balances, issuer names from stellar.toml, filterable history, signers, thresholds, flags, sponsorship, data entries; muxed (`M…`) addresses resolve to their base account |
-| Contracts | `/contract/[id]`, `/contracts` | WASM hash and TTL, the interface parsed from the contract spec, events, decoded storage, WASM download, Stellar Asset Contract detection; a directory of active and all contracts |
-| Assets | `/asset/[id]`, `/assets` | supply, holders and top holders; a ranked asset directory |
+| Contracts | `/contract/[id]`, `/contracts` | WASM hash and TTL, the interface parsed from the contract spec, events, decoded storage, WASM download, Stellar Asset Contract detection; for Soroban-only tokens, holders, the holder map and top holders, marked best effort when the token is older than the index; a directory of active and all contracts |
+| Liquidity pools | `/liquidity-pools`, `/pool/[id]` | top 100 pools by value locked across Stellar's classic AMM, Soroswap and Aquarius, with a tab per protocol; a pool page with reserves, price, TVL, 24h volume and fees, LP accounts (classic) or pool type (Soroban), value locked and volume per day at that day's prices, and the latest trades, deposits and withdrawals. `L…` pool addresses link here and are searchable; a Soroban pool opens at `/pool/C…` |
+| Assets | `/asset/[id]`, `/assets` | supply, holders, price, a holder map (top 100 as bubbles by share of supply, clustered by transfers between them in the last 90 days) and top holders; a ranked asset directory |
 | Ledgers | `/ledger/[sequence]`, `/ledgers` | close metadata, transactions, previous and next ledger |
-| DeFi | `/defi/[slug]` | per-protocol TVL and volume; recent trades on the Stellar DEX page |
+| DeFi | `/defi`, `/defi/[slug]` | an overview with value locked, 24h volume and fees across the classic AMM, Aquarius and Soroswap, computed from our indexer, value locked and trade volume per day split by protocol, and DefiLlama per protocol with the gap between the two; per-protocol TVL and volume; recent trades on the Stellar DEX page; on Aquarius and Soroswap, our own totals and the latest swaps, deposits and withdrawals across their pools |
+| Analytics | `/analytics` | the network per complete UTC day from our indexer: transactions (classic and Soroban), failure rate, operations and their types, active and new accounts, fees (classic and Soroban), contract calls, new contracts and token transfers over 7, 30 or 90 days, the latest day against its 7-day average, the most called contracts of the week, and every number in a table |
 | Search | `/search` | `G`/`M`/`C` addresses, transaction hashes, ledger numbers, asset codes and federation addresses (`name*domain`, resolved in the browser through the domain's `stellar.toml`) |
 
-The site opens on mainnet. The header switches to testnet and back, and connects a wallet read-only (Freighter, xBull). Analytics and liquidity pools are placeholder pages until the indexer's full history lands.
+The site opens on mainnet. The header switches to testnet and back, and connects a wallet read-only (Freighter, xBull). Analytics starts where the indexer does (6 October 2026) and reaches further back as its history backfill lands.
 
 The humanizer covers all 27 operation types (24 classic, plus `invoke_host_function`, `extend_footprint_ttl` and `restore_footprint`), with a safe fallback for anything unknown. Amounts stay `bigint` from the wire to the screen; no stroop math runs in floating point.
 
@@ -49,16 +51,20 @@ The humanizer covers all 27 operation types (24 classic, plus `invoke_host_funct
 | Ledgers, recent transactions | indexer (ClickHouse); Horizon fallback | Horizon |
 | Contracts: summary, storage, interface, events, WASM | indexer (ClickHouse and PostgREST); RPC fallback. Events go back to go-live, 100 at a time: older batches load through `/api/contracts/[id]/events` when the last page is reached | Stellar RPC (recent events only) |
 | Asset supply and holder count | indexer; Horizon fallback | Horizon |
-| Top holders, asset and contract directories | indexer only | not available |
+| Top holders, holder map links, asset and contract directories | indexer only | not available |
 | Accounts: balances, signers, flags, data entries | indexer (PostgREST); Horizon fallback | Horizon |
 | Account history and "Your activity" | indexer (ClickHouse) through `/api/accounts/[id]/activity` for the latter; Horizon for history before 6 October 2026 and as fallback | Horizon |
 | Transaction detail: operations, contract calls, return values, events, balance changes | indexer (ClickHouse); Horizon, with RPC and the AWS ledger archive for Soroban results, for transactions before 6 October 2026 and as fallback | Horizon, with RPC for Soroban results |
 | Live ledger pulse | indexer, polled every second through `/api/ledgers/live`; Horizon SSE fallback | Horizon SSE |
 | Live operations feed | indexer, polled every 20 seconds through `/api/operations/live`; Horizon SSE fallback | Horizon SSE |
 | Network growth, account totals | indexer; stellar.expert fallback | same (always mainnet figures) |
-| Top tokens | indexer: 7-day senders, holders, order book price; XLM price from CoinGecko | same (always mainnet) |
+| Top tokens | indexer: 7-day senders, holders, price from our pools (order book mid as fallback), XLM from the XLM / USDC pool | same (always mainnet) |
+| Liquidity pools | indexer only. Classic: live reserves (API), ranking from the daily copy (ClickHouse). Soroban: contracts holding trusted assets (daily SAC balances) that emit Soroswap or Aquarius pool events; reserves from their latest `sync` / `update_reserves`, a concentrated pool's price from `pool_state`, an Aquarius pool's type and fee from a trade between two reserve updates. Trades from each pool's transfers of its own tokens. Valued by the XLM, USDC or deeply priced side (an asset priced from a pool of at least 100,000 XLM): twice for constant product pools, the other side at the pool's own price but never above it for stable and concentrated ones. A Soroban pool's valuing side has to be held for real in the daily balances. Volume counts each trade once | not available |
+| Asset price | indexer: deepest pool against XLM or Circle USDC (pools under 1,000 XLM skipped), order book mid as fallback; XLM from the XLM / USDC pool | not shown |
 | XLM price and market stats | CoinGecko | same |
-| TVL, protocols, DEX volume and trades | DefiLlama, Horizon | same (always mainnet) |
+| AMM value locked and volume per protocol | indexer: the top 500 classic pools and every Aquarius and Soroswap pool we can value, added up (same reserves, prices and trades as the pool pages) | same (always mainnet) |
+| Value locked and volume over time | indexer: volume is every trade through today's valued pools over each complete UTC day; value locked is a classic pool's end-of-day reserves walked back from today's through each day's transfers in and out, a Soroban pool's from its last reserves event of the day; each day valued at that day's prices, rebuilt the same way from the price pools. Up to 90 full days the index covers without a gap | not available |
+| TVL history, other protocols, DEX volume and trades | DefiLlama, Horizon | same (always mainnet) |
 | Issuer names and icons | SEP-1 `stellar.toml` from the issuer's home domain | same |
 
 Indexer reads with another source go through `withIndexer` in [`lib/stellar/indexer/client.ts`](lib/stellar/indexer/client.ts). When the indexer isn't configured, fails or has no record, the page reads the old source instead. Reads with no other source (top holders, contract storage and creation, the directories) show an unavailable state instead.

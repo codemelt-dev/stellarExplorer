@@ -18,6 +18,12 @@ describe("resolveQuery", () => {
     expect(resolveQuery(CONTRACT)).toEqual({ type: "contract", id: CONTRACT });
   });
 
+  it("detects liquidity pool addresses (L, 56 chars) and routes them to the pool", () => {
+    const pool = "LCSGRVA5R2NY6PDSBFSRMCFXJN63PLEZKLOK4DG7ESDR2HM4PMAIQQUG";
+    expect(resolveQuery(pool)).toEqual({ type: "liquidityPool", id: pool });
+    expect(routeFor(resolveQuery(pool))).toBe(`/pool/${pool}`);
+  });
+
   it("detects muxed accounts (M, 69 chars)", () => {
     expect(resolveQuery(MUXED)).toEqual({ type: "muxedAccount", id: MUXED });
   });

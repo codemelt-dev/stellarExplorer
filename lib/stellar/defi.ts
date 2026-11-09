@@ -155,7 +155,8 @@ export async function getProtocolVolume(
 export interface TvlBreakdownRow {
   slug: string;
   name: string;
-  logo: string;
+  /** Null for Stellar's own classic pools, drawn with the Stellar mark. */
+  logo: string | null;
   tvl: number;
 }
 

@@ -248,6 +248,20 @@ export async function indexedActiveContracts(
   return rows.map((r) => ({ contractId: r.contract_id, calls: Number(r.calls) }));
 }
 
+/** Contracts with the most calls over the last `days` days, with how many accounts called them. */
+export async function indexedTopContracts(
+  days: number,
+  limit: number,
+): Promise<Array<{ contractId: string; calls: number; callers: number }>> {
+  const rows = await chQuery<{ contract_id: string; calls: string | number; callers: string | number }>(
+    `SELECT contract_id, count() AS calls, uniq(caller) AS callers FROM contract_calls
+     WHERE closed_at >= now() - INTERVAL {days:UInt32} DAY
+     GROUP BY contract_id ORDER BY calls DESC LIMIT {limit:UInt32}`,
+    { days, limit },
+  );
+  return rows.map((r) => ({ contractId: r.contract_id, calls: Number(r.calls), callers: Number(r.callers) }));
+}
+
 interface ChCreation {
   creator: string;
   closed_ts: number;

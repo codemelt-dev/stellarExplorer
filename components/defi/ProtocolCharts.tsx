@@ -4,8 +4,8 @@ import { useState } from "react";
 import { TvlChart } from "./TvlChart";
 import { VolumeChart } from "./VolumeChart";
 import { EmptyState } from "@/components/states/EmptyState";
-import type { TvlPoint } from "@/lib/stellar/defi";
-import { cn } from "@/lib/utils";
+import type { TvlBreakdownRow, TvlPoint } from "@/lib/stellar/defi";
+import { Segmented } from "@/components/layout/Segmented";
 
 type Metric = "tvl" | "volume";
 const RANGES = [7, 30, 90] as const;
@@ -15,12 +15,27 @@ export function ProtocolCharts({
   tvl,
   volume,
   noVolumeMessage,
+  noTvlMessage = "Couldn't reach DefiLlama. TVL history will be back on the next refresh.",
+  tvlLabel,
+  volumeLabel,
+  tvlBreakdown,
+  volumeBreakdown,
+  initialMetric,
 }: {
   tvl: TvlPoint[];
   volume: Array<{ date: number; volume: number }> | null;
   noVolumeMessage: string;
+  noTvlMessage?: string;
+  /** What each chart shows, for screen readers. */
+  tvlLabel?: string;
+  volumeLabel?: string;
+  /** Per day key (unix date / 86400), each chart's split for its tooltip. */
+  tvlBreakdown?: Record<number, TvlBreakdownRow[]>;
+  volumeBreakdown?: Record<number, TvlBreakdownRow[]>;
+  /** The chart shown first: volume when there is any, unless told otherwise. */
+  initialMetric?: Metric;
 }) {
-  const [metric, setMetric] = useState<Metric>(volume ? "volume" : "tvl");
+  const [metric, setMetric] = useState<Metric>(initialMetric ?? (volume ? "volume" : "tvl"));
   const [days, setDays] = useState<(typeof RANGES)[number]>(30);
 
   const tvlPoints = tvl.slice(-days);
@@ -53,47 +68,16 @@ export function ProtocolCharts({
       <div className="flex flex-1 flex-col justify-center">
         {metric === "tvl" ? (
           tvlPoints.length > 1 ? (
-            <TvlChart points={tvlPoints} />
+            <TvlChart points={tvlPoints} breakdown={tvlBreakdown} label={tvlLabel} />
           ) : (
-            <EmptyState message="Couldn't reach DefiLlama. TVL history will be back on the next refresh." />
+            <EmptyState message={noTvlMessage} />
           )
         ) : volumePoints.length > 0 ? (
-          <VolumeChart points={volumePoints} />
+          <VolumeChart points={volumePoints} breakdown={volumeBreakdown} label={volumeLabel} />
         ) : (
           <EmptyState message={noVolumeMessage} />
         )}
       </div>
-    </div>
-  );
-}
-
-function Segmented({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: Array<{ id: string; label: string }>;
-  value: string;
-  onChange: (id: string) => void;
-}) {
-  return (
-    <div role="group" aria-label={label} className="flex rounded-md border border-border p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          aria-pressed={o.id === value}
-          onClick={() => onChange(o.id)}
-          className={cn(
-            "rounded px-2 py-0.5 text-xs transition-colors duration-150",
-            o.id === value ? "bg-surface-2 text-foreground" : "text-dim hover:text-foreground",
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
     </div>
   );
 }

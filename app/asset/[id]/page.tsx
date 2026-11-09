@@ -1,29 +1,24 @@
 import type { Metadata } from "next";
-import { Coins, Globe, PieChart, SearchX, Users } from "lucide-react";
+import { Coins, DollarSign, Globe, PieChart, SearchX, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { HolderSections, percent } from "@/components/asset/HolderSections";
 import { Address } from "@/components/stellar/Address";
-import { Amount } from "@/components/stellar/Amount";
 import { Identicon } from "@/components/stellar/Identicon";
 import { StellarMark } from "@/components/stellar/StellarMark";
 import { StatTile } from "@/components/stats/StatTile";
-import { PagedList } from "@/components/layout/PagedList";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
 import { getAccount } from "@/lib/stellar/accounts";
-import {
-  assetContractId,
-  getAsset,
-  getTopHolders,
-  type AssetHolder,
-} from "@/lib/stellar/assets";
+import { assetContractId, getAsset, getTopHolders } from "@/lib/stellar/assets";
 import { parseAssetId, type AssetIdentity } from "@/lib/stellar/assetId";
 import { formatAmount, stroopsToLumens } from "@/lib/stellar/amount";
 import { getContractSummary } from "@/lib/stellar/contracts";
 import { activeNetwork } from "@/lib/stellar/network";
 import { fetchTomlOrgInfo } from "@/lib/stellar/toml";
 import { NotFoundError } from "@/lib/stellar/transactions";
-import { compactNumber } from "@/lib/format";
+import { compactNumber, formatPrice } from "@/lib/format";
+import { getAssetPrice, type AssetPrice } from "@/lib/stellar/pricing";
 
 export async function generateMetadata({
   params,
@@ -44,13 +39,27 @@ async function quiet<T>(work: Promise<T>): Promise<T | null> {
   }
 }
 
-function percent(part: bigint, whole: bigint): number | null {
-  if (whole <= 0n) return null;
-  return Number((part * 1_000_000n) / whole) / 10_000;
+function xlmAmount(n: number): string {
+  if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  if (n >= 1) return n.toLocaleString("en-US", { maximumFractionDigits: 4 });
+  return n.toPrecision(4);
 }
 
-const holderGrid =
-  "grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-4 sm:grid-cols-[2.5rem_minmax(0,1fr)_auto_9rem]";
+function priceValue(price: AssetPrice | null, code: string): string {
+  if (!price) return "–";
+  if (price.usd !== null) return formatPrice(price.usd);
+  return code === "XLM" ? "–" : `${xlmAmount(price.xlm)} XLM`;
+}
+
+function priceCaption(price: AssetPrice | null, native: boolean, netLabel: string): string {
+  if (!price) return netLabel === "mainnet" ? "no pool or order book prices it" : "mainnet only";
+  const depth = price.depthXlm === null ? "" : `${compactNumber(price.depthXlm)} XLM`;
+  if (native) return `from the XLM / USDC pool of ${depth}`;
+  const xlm = `${xlmAmount(price.xlm)} XLM`;
+  if (price.source === "xlm pool") return `${xlm} in a pool of ${depth}`;
+  if (price.source === "usdc pool") return `${xlm}, from a USDC pool of ${depth}`;
+  return `${xlm}, order book mid`;
+}
 
 export default async function AssetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -94,10 +103,11 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
   }
 
   const contractId = assetContractId(identity, network.passphrase);
-  const [holders, issuer, contract] = await Promise.all([
+  const [holders, issuer, contract, price] = await Promise.all([
     getTopHolders(identity),
     identity.kind === "issued" ? quiet(getAccount(identity.issuer)) : null,
     contractId ? quiet(getContractSummary(contractId)) : null,
+    getAssetPrice(identity),
   ]);
   const toml = issuer?.home_domain ? await fetchTomlOrgInfo(issuer.home_domain) : null;
 
@@ -146,7 +156,14 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile
+          label="Price"
+          info="From our own liquidity pools: the deepest pool against XLM (or Circle USDC), with XLM priced from the XLM / USDC pool. Pools holding under 1,000 XLM aren't used; without one, the order book's mid price."
+          value={priceValue(price, identity.code)}
+          caption={priceCaption(price, identity.kind === "native", netLabel)}
+          icon={DollarSign}
+        />
         <StatTile
           label="Holders"
           info="Accounts that hold this asset."
@@ -177,34 +194,15 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
         </Card>
       )}
 
-      <section id="holders" className="flex scroll-mt-24 flex-col gap-3">
-        <h2 className="text-lg font-semibold">Top holders</h2>
-        <Card className="gap-3 p-5">
-          {holders === null ? (
-            <EmptyState
-              message={`The holder ranking is built by the indexer, which covers mainnet only. It isn't available on ${netLabel}.`}
-            />
-          ) : holders.length === 0 ? (
-            <EmptyState message="No holders ranked yet. The ranking is rebuilt once a day." />
-          ) : (
-            <>
-              <div
-                className={`${holderGrid} border-b border-border pb-2 text-xs font-medium uppercase tracking-wider text-dim`}
-              >
-                <span>#</span>
-                <span>Holder</span>
-                <span className="text-right">Balance</span>
-                <span className="hidden text-right sm:block">Share</span>
-              </div>
-              <PagedList topId="holders" className="flex flex-col">
-                {holders.map((holder) => (
-                  <HolderRow key={holder.rank} holder={holder} supply={supply} code={identity.code} />
-                ))}
-              </PagedList>
-            </>
-          )}
-        </Card>
-      </section>
+      <HolderSections
+        identity={identity}
+        holders={holders}
+        supply={supply}
+        code={identity.code}
+        decimals={7}
+        issuer={identity.kind === "issued" ? identity.issuer : null}
+        netLabel={netLabel}
+      />
     </div>
   );
 }
@@ -223,43 +221,5 @@ function AssetIcon({ identity }: { identity: AssetIdentity }) {
     <span className="mt-1 flex size-11 shrink-0 items-center justify-center rounded-md bg-surface">
       <StellarMark className="size-6" />
     </span>
-  );
-}
-
-function HolderRow({
-  holder,
-  supply,
-  code,
-}: {
-  holder: AssetHolder;
-  supply: bigint;
-  code: string;
-}) {
-  const share = percent(BigInt(holder.balance), supply);
-  return (
-    <div className={`${holderGrid} h-11 border-b border-border last:border-b-0`}>
-      <span className="text-sm text-dim tabular-nums">{holder.rank}</span>
-      <span className="min-w-0 truncate">
-        <Address address={holder.holder} chars={6} />
-      </span>
-      <span className="text-right">
-        <Amount amount={stroopsToLumens(holder.balance)} assetCode={code} maxDecimals={2} />
-      </span>
-      <span className="hidden items-center justify-end gap-2 sm:flex">
-        {share !== null && (
-          <>
-            <span className="h-1 w-14 overflow-hidden rounded-full bg-surface-2" aria-hidden="true">
-              <span
-                className="block h-full rounded-full bg-dim"
-                style={{ width: `${Math.min(share, 100)}%` }}
-              />
-            </span>
-            <span className="w-14 text-right font-mono text-xs tabular-nums">
-              {share < 0.01 ? "<0.01" : share.toFixed(2)}%
-            </span>
-          </>
-        )}
-      </span>
-    </div>
   );
 }
