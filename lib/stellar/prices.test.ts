@@ -129,12 +129,13 @@ describe("valueByHoldings", () => {
     ).toMatchObject({ xlm: 1_500, by: "native" });
   });
 
-  it("values the other side at the pool's price, never above the trusted side", () => {
+  it("values the other side at the pool's price, never above three times the trusted side", () => {
     // 1 LGSC = 200 XLM in this pool, so 0.005 LGSC per XLM
     const xlmFirst = (lgsc: number) =>
       valueByHoldings(book, { asset: "native", amount: 1_000 }, { asset: LGSC, amount: lgsc }, 0.005)!.xlm;
     expect(xlmFirst(2)).toBeCloseTo(1_400, 9);
-    expect(xlmFirst(10)).toBe(2_000);
+    expect(xlmFirst(10)).toBeCloseTo(3_000, 9);
+    expect(xlmFirst(50)).toBe(4_000);
     expect(xlmFirst(0)).toBe(1_000);
     const lgscFirst = valueByHoldings(book, { asset: LGSC, amount: 2 }, { asset: "native", amount: 1_000 }, 200)!;
     expect(lgscFirst).toMatchObject({ xlm: 1_400, by: "native" });

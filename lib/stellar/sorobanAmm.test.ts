@@ -98,6 +98,20 @@ describe("aquariusPool", () => {
     expect(pool!.price).toBeCloseTo(1.0004, 4);
   });
 
+  it("reads a small trade of a pricey token once its fee is big enough", () => {
+    // 0.02 BTC into a 0.10% stable pool
+    const pool = aquariusPool(
+      [
+        reserves("1000199900", "999800300"),
+        trade(USDC, "200000", "199700", "200"),
+        reserves("1000000000", "1000000000"),
+      ],
+      [USDC, USDX],
+    );
+    expect(pool).toMatchObject({ kind: "stable", feeBp: 10 });
+    expect(pool!.price).toBeCloseTo(0.9985, 4);
+  });
+
   it("skips trades too small to tell and gives up without one", () => {
     const tiny = [reserves("100", "100"), trade(USDC, "5000", "4990", "5"), reserves("95", "105")];
     expect(aquariusPool(tiny, [XLM, USDC])).toBeNull();

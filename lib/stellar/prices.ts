@@ -154,10 +154,16 @@ export function valueBySide(
 }
 
 /**
- * The value of a concentrated pool, whose sides needn't be worth the same:
- * the trusted side at its price, the other at the pool's own price
- * (`bPerA`, B per A) but never above the trusted side. Both trusted, both
- * at their prices. Null when neither side can be trusted.
+ * Real stable and concentrated pools hold up to about 2.4 times as much of
+ * their unpriced side; a junk pool can't claim more than this.
+ */
+export const UNPRICED_SIDE_CAP = 3;
+
+/**
+ * The value of a stable or concentrated pool, whose sides needn't be worth
+ * the same: the trusted side at its price, the other at the pool's own price
+ * (`bPerA`, B per A) but never above UNPRICED_SIDE_CAP times the trusted side.
+ * Both trusted, both at their prices. Null when neither side can be trusted.
  */
 export function valueByHoldings(
   book: PriceBook,
@@ -175,7 +181,9 @@ export function valueByHoldings(
   else {
     // the other side in units of the trusted one, at the pool's price
     const inSide = aFirst ? other.amount / bPerA : other.amount * bPerA;
-    rest = Number.isFinite(inSide) ? Math.min(inSide * book.assets.get(side.asset)!.xlm, anchor) : 0;
+    rest = Number.isFinite(inSide)
+      ? Math.min(inSide * book.assets.get(side.asset)!.xlm, anchor * UNPRICED_SIDE_CAP)
+      : 0;
   }
   const xlm = anchor + rest;
   return { xlm, usd: book.xlmUsd === null ? null : xlm * book.xlmUsd, by: side.asset };

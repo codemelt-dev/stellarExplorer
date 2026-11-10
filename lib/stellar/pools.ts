@@ -65,8 +65,9 @@ const ACTIVITY = 50;
 const DAYS = 30;
 // contracts to check for Soroban pools, by what they hold
 const SOROBAN_CANDIDATES = 400;
-// recent trades and reserve updates to tell an Aquarius pool's kind from
-const AQUARIUS_EVENTS = 12;
+// recent trades and reserve updates to tell an Aquarius pool's kind from;
+// BTC and ETH pools go a dozen trades between ones big enough to read
+const AQUARIUS_EVENTS = 40;
 // the busiest pools emit a few hundred thousand events a month; a token like
 // XLM emits hundreds of millions, too many to read through for pool events
 const MAX_POOL_EVENTS = 2_000_000;
