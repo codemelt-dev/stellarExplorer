@@ -84,10 +84,22 @@ export function LiveOpsFeed() {
       }, LIST_REFRESH_MS);
     }
 
+    // a hidden tab stops polling and picks up again when back in view
+    let asleep = false;
+    const wake = () => {
+      if (!asleep || document.visibilityState !== "visible") return;
+      asleep = false;
+      pollIndexer(false);
+    };
+
     // mainnet: the newest operations from the indexer, through our route,
     // every few ledgers. While hovered a round is skipped; the next one
     // brings the newest anyway
     async function pollIndexer(first: boolean) {
+      if (document.visibilityState === "hidden") {
+        asleep = true;
+        return;
+      }
       if (!first && pausedRef.current) {
         timer = setTimeout(() => pollIndexer(false), LIST_REFRESH_MS);
         return;
@@ -105,14 +117,17 @@ export function LiveOpsFeed() {
       }
     }
 
-    if (id === "mainnet") pollIndexer(true);
-    else streamFromHorizon();
+    if (id === "mainnet") {
+      document.addEventListener("visibilitychange", wake);
+      pollIndexer(true);
+    } else streamFromHorizon();
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
       clearInterval(flusher);
       source?.close();
+      document.removeEventListener("visibilitychange", wake);
     };
   }, []);
 
