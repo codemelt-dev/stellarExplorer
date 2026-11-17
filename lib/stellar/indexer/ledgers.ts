@@ -39,7 +39,7 @@ function toLedgerRow(l: ChLedger): LedgerRow {
   };
 }
 
-/** Newest first, older than `before`. Null when the indexer has none (before go-live). */
+/** Newest first, older than `before`. Null when the indexer has none. */
 export async function indexedLedgers(
   before: number | null,
   limit: number,

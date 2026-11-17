@@ -123,8 +123,8 @@ interface HistoryOptions {
 }
 
 // newest first, filtered on the server. Mainnet reads the indexer; paging
-// tokens are the same on both sources, so Older walks on into Horizon's
-// history from before the indexer's go-live
+// tokens are the same on both sources, so Horizon can pick up any page the
+// indexer can't serve
 export const getAccountOperations = cache(
   (id: string, options: HistoryOptions = {}): Promise<OperationsPage> =>
     withIndexer(

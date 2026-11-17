@@ -70,8 +70,8 @@ export async function apiGet<T>(view: string, query: Record<string, string>): Pr
 
 /**
  * Indexer first, the old source (Horizon or RPC) when it is off, fails, or
- * returns null. Null means "not indexed" (nothing before go-live is), so old
- * data still resolves.
+ * returns null. Null means "not indexed", so data the indexer lacks (testnet,
+ * a ledger not ingested yet) still resolves.
  * `anyNetwork` is for mainnet facts shown on every network (home stats). It
  * skips the network cookie, so those pages can stay static.
  */

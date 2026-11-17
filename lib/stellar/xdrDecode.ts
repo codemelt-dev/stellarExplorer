@@ -1,4 +1,4 @@
-import { Address, Asset, scValToNative, xdr } from "@stellar/stellar-sdk";
+import { Address, Asset, TransactionBuilder, scValToNative, xdr } from "@stellar/stellar-sdk";
 import type { AssetRef } from "./txFlow";
 
 // defensive decoders: anything that fails to parse returns null and the UI
@@ -154,6 +154,56 @@ export function transactionMetaFromLedger(batch: Buffer, hash: string): string |
       if (applied.result().transactionHash().toString("hex") === hash) {
         return applied.txApplyProcessing().toXDR("base64");
       }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// a ledger's envelopes in any LedgerCloseMeta version: V0 (until protocol 19)
+// holds a plain transaction set, V1 and V2 a generalized one in phases, and
+// from protocol 23 a phase can hold parallel stages of clusters
+function ledgerEnvelopes(lcm: xdr.LedgerCloseMeta): xdr.TransactionEnvelope[] {
+  if (lcm.switch() === 0) return lcm.v0().txSet().txes();
+  const set = (lcm.switch() === 1 ? lcm.v1() : lcm.v2()).txSet();
+  return set
+    .v1TxSet()
+    .phases()
+    .flatMap((phase) =>
+      phase.switch() === 0
+        ? phase.v0Components().flatMap((c) => c.txsMaybeDiscountedFee().txes())
+        : phase.parallelTxsComponent().executionStages().flat(2),
+    );
+}
+
+/**
+ * A transaction's envelope, result and meta, base64, and its signatures, out
+ * of a ledger archive file. The envelope is found by hashing each one, the
+ * set isn't in apply order. Null when the hash isn't in that ledger.
+ */
+export function transactionRawFromLedger(
+  batch: Buffer,
+  hash: string,
+  passphrase: string,
+): { signatures: string[]; envelope: string; result: string; meta: string } | null {
+  try {
+    const lcm = xdr.LedgerCloseMetaBatch.fromXDR(batch).ledgerCloseMeta()[0];
+    if (!lcm) return null;
+    const body = lcm.switch() === 0 ? lcm.v0() : lcm.switch() === 1 ? lcm.v1() : lcm.v2();
+    const applied = body
+      .txProcessing()
+      .find((a) => a.result().transactionHash().toString("hex") === hash);
+    if (!applied) return null;
+    for (const envelope of ledgerEnvelopes(lcm)) {
+      const tx = TransactionBuilder.fromXDR(envelope, passphrase);
+      if (tx.hash().toString("hex") !== hash) continue;
+      return {
+        signatures: tx.signatures.map((s) => s.signature().toString("base64")),
+        envelope: envelope.toXDR("base64"),
+        result: applied.result().result().toXDR("base64"),
+        meta: applied.txApplyProcessing().toXDR("base64"),
+      };
     }
     return null;
   } catch {
