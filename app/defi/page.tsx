@@ -266,8 +266,8 @@ export default async function DefiPage() {
               classic AMM pools at all.
             </li>
             <li>
-              Our index starts on 6 October 2026, so the chart above does too and grows with the
-              history backfill. The charts on the protocol pages still come from DefiLlama.{" "}
+              The chart above covers the last 90 days from our own index, and so do the Aquarius
+              and Soroswap pages. The other protocol pages use DefiLlama.{" "}
               <Link href="/liquidity-pools" className="text-gold hover:underline underline-offset-4">
                 See every pool
               </Link>

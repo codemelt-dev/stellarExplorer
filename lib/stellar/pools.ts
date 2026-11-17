@@ -598,6 +598,16 @@ export function getProtocolVolumeHistory(): Promise<ProtocolVolumeDay[] | null> 
   });
 }
 
+/** One protocol's value locked per day out of the per-protocol history, for its own page. */
+export function tvlSeriesOf(days: ProtocolDay[], protocol: PoolProtocol): TvlPoint[] {
+  return days.map((d) => ({ date: d.date, tvl: d.tvl[protocol] }));
+}
+
+/** One protocol's daily volume out of the per-protocol history. */
+export function volumeSeriesOf(days: ProtocolVolumeDay[], protocol: PoolProtocol): Array<{ date: number; volume: number }> {
+  return days.map((d) => ({ date: d.date, volume: d.volume[protocol] }));
+}
+
 type ChPoolOp = Awaited<ReturnType<typeof indexedPoolActivity>>[number];
 
 function activityOf(op: ChPoolOp): PoolActivity | null {
@@ -728,19 +738,27 @@ export function getProtocolActivity(
 ): Promise<{ pools: number; activity: ProtocolActivity[] } | null> {
   return withIndexer<{ pools: number; activity: ProtocolActivity[] } | null>(
     `${protocol} activity`,
-    async () => {
-      const infos = (await cachedSorobanList()).filter((i) => i.protocol === protocol);
-      const byAddress = new Map(infos.map((i) => [i.id, i]));
-      const ops = await indexedPoolsActivity(tokensByPool(infos), PROTOCOL_ACTIVITY_LEDGERS, ACTIVITY);
-      const activity = ops.flatMap((op) => {
-        const read = activityOf(op);
-        const info = byAddress.get(op.pool);
-        if (!read || !info) return [];
-        return [{ ...read, pool: { id: info.id, a: identityOf(info.keys[0]), b: identityOf(info.keys[1]) } }];
-      });
-      return { pools: infos.length, activity };
-    },
+    () => cachedProtocolActivity(protocol),
     async () => null,
     { anyNetwork: true },
   );
 }
+
+// throws on indexer errors so unstable_cache keeps only good results. Cached
+// like the page itself: its fetches can't run in a cached page's render
+async function loadProtocolActivity(
+  protocol: SorobanProtocol,
+): Promise<{ pools: number; activity: ProtocolActivity[] }> {
+  const infos = (await cachedSorobanList()).filter((i) => i.protocol === protocol);
+  const byAddress = new Map(infos.map((i) => [i.id, i]));
+  const ops = await indexedPoolsActivity(tokensByPool(infos), PROTOCOL_ACTIVITY_LEDGERS, ACTIVITY);
+  const activity = ops.flatMap((op) => {
+    const read = activityOf(op);
+    const info = byAddress.get(op.pool);
+    if (!read || !info) return [];
+    return [{ ...read, pool: { id: info.id, a: identityOf(info.keys[0]), b: identityOf(info.keys[1]) } }];
+  });
+  return { pools: infos.length, activity };
+}
+
+const cachedProtocolActivity = unstable_cache(loadProtocolActivity, ["protocol-activity"], { revalidate: 60 });
