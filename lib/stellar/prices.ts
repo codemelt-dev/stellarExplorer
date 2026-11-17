@@ -189,6 +189,20 @@ export function valueByHoldings(
   return { xlm, usd: book.xlmUsd === null ? null : xlm * book.xlmUsd, by: side.asset };
 }
 
+/**
+ * What an account's `amount` of an asset is worth in USD at its price. An
+ * asset only a shallow pool prices counts for no more than that pool's XLM
+ * side, all that selling it could ever bring, so a junk airdrop can't make an
+ * account look rich. Null when unpriced or XLM has no USD price.
+ */
+export function holdingUsd(book: PriceBook, asset: string, amount: number): number | null {
+  const price = book.assets.get(asset);
+  if (!price || book.xlmUsd === null || !Number.isFinite(amount)) return null;
+  let xlm = amount * price.xlm;
+  if (!trust(book, asset) && price.depthXlm !== null) xlm = Math.min(xlm, price.depthXlm);
+  return xlm * book.xlmUsd;
+}
+
 /** The assets trusted to value pools, with their XLM prices. */
 export function anchorAssets(book: PriceBook): Array<{ asset: string; xlm: number }> {
   return [...book.assets.entries()]

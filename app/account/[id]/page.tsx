@@ -18,6 +18,8 @@ import {
 } from "@/lib/stellar/accounts";
 import { NotFoundError } from "@/lib/stellar/transactions";
 import { fetchTomlOrgInfo } from "@/lib/stellar/toml";
+import { toHoldings } from "@/lib/stellar/holdings";
+import { getActivePriceBook } from "@/lib/stellar/pricing";
 import { truncateKey } from "@/lib/stellar/strkey";
 
 export async function generateMetadata({
@@ -86,7 +88,10 @@ export default async function AccountPage({
     );
   }
 
-  const toml = await fetchTomlOrgInfo(account.home_domain);
+  const [toml, prices] = await Promise.all([
+    fetchTomlOrgInfo(account.home_domain),
+    getActivePriceBook(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -140,7 +145,7 @@ export default async function AccountPage({
       <MyActivity accountId={accountId} />
 
       <div className="grid gap-6 md:grid-cols-2">
-        <BalancesCard balances={account.balances} />
+        <BalancesCard holdings={toHoldings(account.balances, prices)} />
         <DetailsAccordion account={account} />
       </div>
       <HistoryFeed
