@@ -3,6 +3,7 @@ import { Coins, DollarSign, Globe, PieChart, SearchX, Users } from "lucide-react
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { HolderSections, percent } from "@/components/asset/HolderSections";
+import { MarketSection } from "@/components/asset/MarketSection";
 import { Address } from "@/components/stellar/Address";
 import { Identicon } from "@/components/stellar/Identicon";
 import { StellarMark } from "@/components/stellar/StellarMark";
@@ -193,6 +194,8 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
           <span className="text-dim">the contract smart contracts use to move this asset</span>
         </Card>
       )}
+
+      <MarketSection assetId={decodeURIComponent(id)} code={identity.code} mainnet={network.id === "mainnet"} />
 
       <HolderSections
         identity={identity}
