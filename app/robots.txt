@@ -1,0 +1,8 @@
+User-Agent: *
+Allow: /
+Disallow: /tx/
+Disallow: /ledger/
+Disallow: /account/
+Disallow: /contract/
+Disallow: /search
+Disallow: /api/

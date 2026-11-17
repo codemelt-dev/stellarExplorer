@@ -30,6 +30,7 @@ import { withIndexer } from "./indexer/client";
 import { indexedRecentTransactions } from "./indexer/transactions";
 import { indexedTransactionDetail } from "./indexer/txDetail";
 import { indexedLatestOperations } from "./indexer/operations";
+import { shared } from "./indexer/shared";
 
 export type TransactionRecord = Horizon.ServerApi.TransactionRecord;
 export type OperationRecord = Horizon.ServerApi.OperationRecord;
@@ -80,18 +81,20 @@ export const getTransactionEffects = cache(
   },
 );
 
+// one indexer read a ledger for every open home page
+const newestOperations = shared(5000, () =>
+  withIndexer("live operations", () => indexedLatestOperations(15), async () => null, {
+    anyNetwork: true,
+  }),
+);
+
 /**
  * The newest mainnet operations for the home page feed, 15 of each kind so
  * every tab has rows. Null when the indexer is off or failing; the browser
  * then streams from Horizon instead.
  */
-export async function getLiveOperations(perKind = 15): Promise<OperationRecord[] | null> {
-  return withIndexer(
-    "live operations",
-    () => indexedLatestOperations(perKind),
-    async () => null,
-    { anyNetwork: true },
-  );
+export async function getLiveOperations(): Promise<OperationRecord[] | null> {
+  return newestOperations();
 }
 
 /** All operations of a transaction (a tx holds at most 100 ops). */

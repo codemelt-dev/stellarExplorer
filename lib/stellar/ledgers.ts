@@ -4,6 +4,7 @@ import { Horizon } from "@stellar/stellar-sdk";
 import { horizon } from "./horizon";
 import { NotFoundError } from "./transactions";
 import { withIndexer } from "./indexer/client";
+import { shared } from "./indexer/shared";
 import { parseCursor } from "./indexer/cursor";
 import {
   indexedLedger,
@@ -123,15 +124,21 @@ export async function getRecentLedgers(cursor?: string, limit = 25): Promise<Led
   );
 }
 
+const LIVE_WINDOW = 60;
+
+// every open tab polls about once a second, so they share one indexer read a
+// second and each gets the part it hasn't seen
+const newestLedgers = shared(1000, () =>
+  withIndexer("live ledgers", () => indexedLiveLedgers(null, LIVE_WINDOW), async () => null, {
+    anyNetwork: true,
+  }),
+);
+
 /**
  * Mainnet ledgers newer than `after` for the live pulse, newest first. Null when
  * the indexer is off or failing; the browser then streams from Horizon instead.
  */
-export async function getLiveLedgers(after: number | null, limit = 60): Promise<ApiLedger[] | null> {
-  return withIndexer(
-    "live ledgers",
-    () => indexedLiveLedgers(after, limit),
-    async () => null,
-    { anyNetwork: true },
-  );
+export async function getLiveLedgers(after: number | null): Promise<ApiLedger[] | null> {
+  const rows = await newestLedgers();
+  return rows && (after === null ? rows : rows.filter((row) => row.sequence > after));
 }

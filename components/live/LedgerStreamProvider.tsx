@@ -173,8 +173,21 @@ export function LedgerStreamProvider({
       };
     }
 
+    // a hidden tab stops polling. Back in view it seeds the window again, so
+    // the ledgers it missed don't count as slow deliveries
+    let asleep = false;
+    const wake = () => {
+      if (!asleep || document.visibilityState !== "visible") return;
+      asleep = false;
+      pollIndexer(0);
+    };
+
     // first call seeds the window, later ones ask only for what's newer
     async function pollIndexer(latest: number) {
+      if (document.visibilityState === "hidden") {
+        asleep = true;
+        return;
+      }
       try {
         const res = await fetch(`/api/ledgers/live${latest ? `?after=${latest}` : ""}`);
         if (!res.ok) throw new Error(`live ledgers ${res.status}`);
@@ -191,13 +204,16 @@ export function LedgerStreamProvider({
       }
     }
 
-    if (id === "mainnet") pollIndexer(0);
-    else streamFromHorizon();
+    if (id === "mainnet") {
+      document.addEventListener("visibilitychange", wake);
+      pollIndexer(0);
+    } else streamFromHorizon();
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
       source?.close();
+      document.removeEventListener("visibilitychange", wake);
     };
   }, []);
 
