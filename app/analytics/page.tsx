@@ -31,8 +31,7 @@ export default async function AnalyticsPage() {
         </div>
         <p className="max-w-3xl text-sm text-dim">
           The network day by day, from our own index: transactions, operations, accounts, fees and
-          Soroban usage for every complete UTC day. Our index starts on 6 October 2026, so the
-          history does too and grows as the backfill lands.
+          Soroban usage for each of the last 90 complete UTC days.
         </p>
       </div>
 

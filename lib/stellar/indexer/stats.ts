@@ -12,15 +12,11 @@ export interface DayCount {
 
 const unixDay = (day: string) => Date.parse(`${day}T00:00:00Z`) / 1000;
 
-/**
- * New accounts per day over the last `days` complete days. Today is still
- * filling up and the first indexed day started mid-day, so both are left out.
- */
+/** New accounts per day over the last `days` complete days. Today is still filling up. */
 export async function indexedNewAccounts(days: number): Promise<DayCount[]> {
   const rows = await chQuery<{ day: string; new_accounts: string | number }>(
     `SELECT day, new_accounts FROM daily_stats FINAL
      WHERE day >= today() - {days:UInt32} AND day < today()
-       AND day > (SELECT min(day) FROM daily_stats)
      ORDER BY day`,
     { days },
   );
@@ -93,29 +89,35 @@ export interface ChNetworkDay {
   token_transfers: string | number;
 }
 
-/**
- * The network's numbers for each complete UTC day over the last `days` days:
- * today is still filling up and the first indexed day started partway.
- */
+/** The network's numbers for each complete UTC day over the last `days` days. */
 export async function indexedNetworkDays(days: number): Promise<ChNetworkDay[]> {
   return chQuery<ChNetworkDay>(
     `SELECT day, transactions, failed_transactions, soroban_transactions, operations, operations_by_type,
             active_accounts, fees_charged, new_accounts, new_contracts, contract_calls, token_transfers
      FROM daily_stats FINAL
      WHERE day >= today() - {days:UInt32} AND day < today()
-       AND day > (SELECT min(day) FROM daily_stats)
      ORDER BY day`,
     { days },
   );
 }
 
-/** What Soroban transactions paid in fees each complete UTC day, in stroops. */
-export async function indexedSorobanFees(days: number): Promise<Array<{ day: string; fees: string }>> {
+/**
+ * What Soroban transactions paid in fees each UTC day from `from` up to, not
+ * including, `to` (YYYY-MM-DD), in stroops. It sums every transaction of those
+ * days, about 6 million a day, so the caller asks a few days at a time. The
+ * days are found in `ledgers` first: transactions is sorted by ledger, not time.
+ */
+export async function indexedSorobanFees(
+  from: string,
+  to: string,
+): Promise<Array<{ day: string; fees: string }>> {
   return chQuery<{ day: string; fees: string }>(
     `SELECT toString(toDate(closed_at)) AS day, toString(sumIf(fee_charged, soroban)) AS fees
      FROM transactions
-     WHERE closed_at >= today() - {days:UInt32} AND closed_at < today()
+     WHERE ledger_sequence BETWEEN
+             (SELECT ifNull(minOrNull(sequence), {max:UInt32}) FROM ledgers WHERE closed_at >= {from:Date})
+         AND (SELECT ifNull(minOrNull(sequence), {max:UInt32}) FROM ledgers WHERE closed_at >= {to:Date}) - 1
      GROUP BY day`,
-    { days },
+    { from, to, max: 0xffffffff },
   );
 }

@@ -52,7 +52,7 @@ export async function indexedAsset(asset: string): Promise<IndexedAsset | null> 
 }
 
 export interface IndexedToken extends IndexedAsset {
-  /** False when the token is older than the index: its balances count only transfers since go-live. */
+  /** False when the index misses some of the token's transfers: its balances count only the ones it has. */
   complete: boolean;
 }
 

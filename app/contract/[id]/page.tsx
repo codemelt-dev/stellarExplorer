@@ -95,7 +95,7 @@ export default async function ContractPage({
   // a token that doesn't say its decimals shows raw units
   const decimals = ownToken?.decimals ?? 0;
   const symbol = ownToken?.symbol ?? "units";
-  // older than our index, the supply can't be counted
+  // with transfers missing from our index, the supply can't be counted
   const supply =
     tokenStats?.complete && BigInt(tokenStats.supply) > 0n ? BigInt(tokenStats.supply) : null;
 
@@ -263,7 +263,7 @@ export default async function ContractPage({
               <span className="text-xs uppercase tracking-wider text-dim">Best effort</span>
               <span className="text-dim">
                 {!tokenStats.complete &&
-                  "This token is older than our index, which starts on 6 October 2026, so balances count only its transfers since then. Shares of the supply show once the history backfill lands. "}
+                  "Our index is missing some of this token's transfers, so balances count only the ones it has and shares of the supply aren't shown. "}
                 {!ownToken &&
                   "The contract doesn't publish its symbol or decimals, so balances are in raw units."}
               </span>

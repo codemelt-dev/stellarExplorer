@@ -185,7 +185,6 @@ export function MyActivity({ accountId }: { accountId: string }) {
               <p className="mt-1 text-[11px] text-dim">
                 Based on your {ops.length === 200 ? "latest 200" : `${ops.length}`}{" "}
                 operations, back to {new Date(oldest).toISOString().slice(0, 10)}.
-                Lifetime totals come with the indexer&apos;s full history backfill.
               </p>
             )}
           </div>
