@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { getXlmMarket } from "@/lib/stellar/market";
 import { NetworkVitals } from "@/components/live/NetworkVitals";
+import { CookieSettings } from "./Consent";
 import { NetworkSwitcher } from "./NetworkSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -16,6 +17,7 @@ export function TopBar() {
         <span className="ml-auto flex shrink-0 items-center gap-2">
           <NetworkSwitcher />
           <ThemeToggle />
+          <CookieSettings />
         </span>
       </div>
     </div>

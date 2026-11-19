@@ -1,3 +1,5 @@
+import { Consent } from "@/components/layout/Consent";
+import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { TopBar } from "@/components/layout/TopBar";
 import { LegendFlyout } from "@/components/layout/LegendFlyout";
@@ -60,8 +62,10 @@ export default function RootLayout({
           <main className="mx-auto w-full max-w-300 flex-1 px-4 py-6 sm:px-6">
             {children}
           </main>
+          <Footer />
           <LegendFlyout />
         </Providers>
+        <Consent />
       </body>
     </html>
   );

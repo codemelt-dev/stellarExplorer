@@ -128,6 +128,7 @@ Open http://localhost:3000. It opens on mainnet and runs with no settings, on pu
 | `INDEXER_CLICKHOUSE_URL` | unset | the indexer's SQL endpoint, server only |
 | `INDEXER_API_URL` | unset | the indexer's REST API, server only |
 | `INDEXER_USER`, `INDEXER_PASSWORD` | unset | the indexer login, server only |
+| `NEXT_PUBLIC_GTM_ID` | unset | Google Tag Manager container. Shows the cookie banner; GTM loads only after a visitor accepts |
 
 Without the `INDEXER_*` settings, mainnet reads Horizon and RPC, the live pulse streams from Horizon, network growth comes from stellar.expert, top holders and the directories are unavailable, and the home page's Top tokens card shows its empty state.
 
