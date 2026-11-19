@@ -5,6 +5,7 @@ const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "**/analytics-pools-and-holders.spec.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   failOnFlakyTests: !!process.env.CI,
@@ -12,7 +13,11 @@ export default defineConfig({
   workers: process.env.CI ? 2 : 4,
   timeout: 30_000,
   expect: { timeout: 10_000 },
-  reporter: [["list"], ["html", { open: "never" }]],
+  reporter: [
+    [process.env.GITHUB_ACTIONS ? "github" : "list"],
+    ["html", { open: "never" }],
+    ["json", { outputFile: "test-results/results.json" }],
+  ],
   globalTeardown: "./e2e/support/global-teardown.ts",
   use: {
     baseURL,

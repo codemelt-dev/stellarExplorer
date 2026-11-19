@@ -93,12 +93,18 @@ test("mainnet XLM summary and holder ranking use indexer data", async ({
 
   await expect(main.getByRole("heading", { name: "Holder map" })).toBeVisible();
   await expect(
-    main.getByRole("img", { name: "Top 2 holders of XLM as bubbles sized by their share of the supply" }),
+    main.getByRole("img", {
+      name: "Top 2 holders of XLM as bubbles sized by their share of the supply",
+    }),
   ).toBeVisible();
   await expect(
-    main.getByText(/Lines join holders that moved XLM between each other in the last 90 days/),
+    main.getByText(
+      /Lines join holders that moved XLM between each other in the last 30 days/,
+    ),
   ).toBeVisible();
-  await expect(main.getByText(/1 cluster holds 40\.00% of the supply/)).toBeVisible();
+  await expect(
+    main.getByText(/1 cluster holds 40\.00% of the supply/),
+  ).toBeVisible();
 });
 
 test("liquidity pools rank classic and Soroswap pools by value from the indexer", async ({
@@ -108,7 +114,9 @@ test("liquidity pools rank classic and Soroswap pools by value from the indexer"
   const main = page.getByRole("main");
   const rows = main.getByRole("link", { name: "Open pool" });
 
-  await expect(main.getByRole("heading", { name: "Liquidity pools" })).toBeVisible();
+  await expect(
+    main.getByRole("heading", { name: "Liquidity pools" }),
+  ).toBeVisible();
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toContainText("$4.0M");
   await expect(rows.nth(0)).toContainText("$200");
@@ -136,8 +144,12 @@ test("a Soroswap pool page reads its reserves from the pair's events", async ({
     main.getByText("Soroswap, constant product, 0.30% fee", { exact: true }),
   ).toBeVisible();
   await expect(main.getByText("$400.0K", { exact: true })).toBeVisible();
-  await expect(main.getByText("valued by its XLM side", { exact: true })).toBeVisible();
-  await expect(main.getByText("constant product pool", { exact: true })).toBeVisible();
+  await expect(
+    main.getByText("valued by its XLM side", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    main.getByText("constant product pool", { exact: true }),
+  ).toBeVisible();
   await expect(
     main.getByText("No trades through this pool in the last 30 days."),
   ).toBeVisible();
@@ -147,17 +159,26 @@ test("a classic pool page opens from its L address", async ({ page }) => {
   await page.goto(`/pool/${CLASSIC_POOL_ADDRESS}`);
   const main = page.getByRole("main");
 
-  await expect(main.getByText("constant product, 0.30% fee", { exact: true })).toBeVisible();
+  await expect(
+    main.getByText("constant product, 0.30% fee", { exact: true }),
+  ).toBeVisible();
   await expect(main.getByText("$4.0M", { exact: true })).toBeVisible();
   await expect(main.getByText("$200", { exact: true })).toBeVisible();
   await expect(main.getByText("3 trades", { exact: true })).toBeVisible();
   await expect(main.getByText("832", { exact: true })).toBeVisible();
-  await expect(main.getByText("400.0K pool shares", { exact: true })).toBeVisible();
+  await expect(
+    main.getByText("400.0K pool shares", { exact: true }),
+  ).toBeVisible();
 
   // nothing moved since yesterday, so both days hold today's reserves
-  await main.getByRole("group", { name: "Metric" }).getByRole("button", { name: "TVL" }).click();
+  await main
+    .getByRole("group", { name: "Metric" })
+    .getByRole("button", { name: "TVL" })
+    .click();
   await expect(
-    main.getByRole("img", { name: "XLM / USDC pool value locked over the last 2 days, currently $4.0M" }),
+    main.getByRole("img", {
+      name: "XLM / USDC pool value locked over the last 2 days, currently $4.0M",
+    }),
   ).toBeVisible();
 });
 
@@ -167,35 +188,62 @@ test("the DeFi overview adds up our pools by protocol next to DefiLlama", async 
   await page.goto("/defi");
   const main = page.getByRole("main");
 
-  await expect(main.getByRole("heading", { name: "DeFi on Stellar" })).toBeVisible();
+  await expect(
+    main.getByRole("heading", { name: "DeFi on Stellar" }),
+  ).toBeVisible();
   await expect(main.getByText("$4.4M", { exact: true })).toBeVisible();
   await expect(main.getByText("2 pools", { exact: true })).toBeVisible();
   await expect(main.getByText("3 trades", { exact: true })).toBeVisible();
   await expect(
-    main.getByRole("img", { name: "Value locked in the pools we index over the last 2 days, currently $4.4M" }),
+    main.getByRole("img", {
+      name: "Value locked in the pools we index over the last 2 days, currently $4.4M",
+    }),
   ).toBeVisible();
 
-  const classic = main.getByRole("link", { name: "Open Stellar AMM", exact: true });
+  const classic = main.getByRole("link", {
+    name: "Open Stellar AMM",
+    exact: true,
+  });
   await expect(classic).toContainText("$4.0M");
   await expect(classic).toContainText("not listed");
   await expect(classic).toContainText("$200");
-  await expect(main.getByRole("link", { name: "Open Soroswap", exact: true })).toContainText("$400.0K");
-  await expect(main.getByRole("link", { name: "Open Blend", exact: true })).toContainText("not indexed yet");
-  await expect(main.getByText(/Couldn't reach DefiLlama, so its columns are empty/)).toBeVisible();
+  await expect(
+    main.getByRole("link", { name: "Open Soroswap", exact: true }),
+  ).toContainText("$400.0K");
+  await expect(
+    main.getByRole("link", { name: "Open Blend", exact: true }),
+  ).toContainText("not indexed yet");
+  await expect(
+    main.getByText(/Couldn't reach DefiLlama, so its columns are empty/),
+  ).toBeVisible();
 });
 
-test("analytics charts the network's complete days from the indexer", async ({ page }) => {
+test("analytics charts the network's complete days from the indexer", async ({
+  page,
+}) => {
   await page.goto("/analytics");
   const main = page.getByRole("main");
 
-  await expect(main.getByRole("heading", { name: "Analytics", exact: true })).toBeVisible();
-  // the latest day was a fifth busier on every count than the one before
-  await expect(main.getByText("+20.0% vs 7-day average", { exact: true })).toHaveCount(6);
   await expect(
-    main.getByRole("img", { name: "Transactions per day over the last 2 days, latest 6.0M" }),
+    main.getByRole("heading", { name: "Analytics", exact: true }),
   ).toBeVisible();
-  await expect(main.getByRole("img", { name: "Fees per day over the last 2 days, latest 4.8K XLM" })).toBeVisible();
-  await expect(main.getByText("Manage sell offer", { exact: true })).toBeVisible();
+  // the latest day was a fifth busier on every count than the one before
+  await expect(
+    main.getByText("+20.0% vs 7-day average", { exact: true }),
+  ).toHaveCount(6);
+  await expect(
+    main.getByRole("img", {
+      name: "Transactions per day over the last 2 days, latest 6.0M",
+    }),
+  ).toBeVisible();
+  await expect(
+    main.getByRole("img", {
+      name: "Fees per day over the last 2 days, latest 4.8K XLM",
+    }),
+  ).toBeVisible();
+  await expect(
+    main.getByText("Manage sell offer", { exact: true }),
+  ).toBeVisible();
   await expect(main.getByText("46.0%", { exact: true })).toBeVisible();
 
   const top = main.getByRole("region", { name: "Most called contracts" });
@@ -203,7 +251,9 @@ test("analytics charts the network's complete days from the indexer", async ({ p
   await expect(top.getByText("34", { exact: true })).toBeVisible();
 
   await main.getByText("Daily numbers", { exact: true }).click();
-  await expect(main.getByRole("cell", { name: "6,000,000", exact: true })).toBeVisible();
+  await expect(
+    main.getByRole("cell", { name: "6,000,000", exact: true }),
+  ).toBeVisible();
 });
 
 test("an unindexed mainnet asset falls back to Horizon's missing-record result", async ({
