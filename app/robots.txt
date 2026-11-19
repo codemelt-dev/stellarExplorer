@@ -1,6 +1,7 @@
 User-Agent: *
 Allow: /
 Disallow: /tx/
+Disallow: /transactions
 Disallow: /ledger/
 Disallow: /account/
 Disallow: /contract/

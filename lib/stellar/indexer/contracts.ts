@@ -151,6 +151,7 @@ function parse(json: unknown): unknown {
 // one batch; a query reads whole granules, so 10 rows cost the same as 100
 const EVENTS_PAGE = 100;
 const MAX_UINT32 = 0xffffffff;
+const MAX_INT32 = 0x7fffffff;
 
 // an event's place in the table: "ledger-tx-op-event"
 function eventCursor(e: ChEvent): string {
@@ -166,9 +167,10 @@ function parseEventCursor(cursor: string): { l: number; t: number; o: number; e:
 
 /**
  * A contract's events, newest first, 100 at a time; `before` is the cursor of
- * the last one already shown. The table is sorted by contract, then position,
- * so every batch is a short range read however far back it is. Fee events
- * (op_index -1) are left out. Null for a malformed cursor.
+ * the last one already shown. The table is sorted by contract, then position.
+ * ClickHouse can't seek on the position tuple, so an inner query finds the
+ * ledger the page reaches back to and the page reads only from there. Fee
+ * events (op_index -1) are left out. Null for a malformed cursor.
  */
 export async function indexedContractEvents(
   contractId: string,
@@ -180,18 +182,31 @@ export async function indexedContractEvents(
     `WITH page AS (
        SELECT ledger_sequence, tx_index, op_index, event_index,
               toUnixTimestamp(closed_at) AS closed_ts, topics, data
-       FROM events WHERE contract_id = {contract:String} AND op_index >= 0
-         ${at ? "AND (ledger_sequence, tx_index, op_index, event_index) < ({l:UInt32}, {t:UInt32}, {o:Int32}, {e:UInt32})" : ""}
-       ORDER BY ledger_sequence DESC, tx_index DESC, op_index DESC, event_index DESC LIMIT {limit:UInt32})
+       FROM events
+       WHERE contract_id = {contract:String} AND op_index >= 0 AND ledger_sequence <= {l:UInt32}
+         AND ledger_sequence >= (SELECT ifNull(minOrNull(ledger_sequence), {max:UInt32}) FROM (
+               SELECT ledger_sequence FROM events
+               WHERE contract_id = {contract:String} AND op_index >= 0 AND ledger_sequence < {l:UInt32}
+               ORDER BY contract_id DESC, ledger_sequence DESC LIMIT {limit:UInt32}))
+         AND (ledger_sequence, tx_index, op_index, event_index) < ({l:UInt32}, {t:UInt32}, {o:Int32}, {e:UInt32})
+       ORDER BY contract_id DESC, ledger_sequence DESC, tx_index DESC, op_index DESC, event_index DESC
+       LIMIT {limit:UInt32})
      SELECT p.ledger_sequence AS ledger_sequence, p.tx_index AS tx_index, p.op_index AS op_index,
             p.event_index AS event_index, p.closed_ts AS closed_ts,
             p.topics AS topics, p.data AS data, lower(hex(t.hash)) AS tx_hash
      FROM page AS p
      LEFT JOIN (SELECT ledger_sequence, tx_index, hash FROM transactions
-                WHERE (ledger_sequence, tx_index) IN (SELECT ledger_sequence, tx_index FROM page)) AS t
+                WHERE ledger_sequence >= (SELECT ifNull(minOrNull(ledger_sequence), {max:UInt32}) FROM page)
+                  AND ledger_sequence <= {l:UInt32}
+                  AND (ledger_sequence, tx_index) IN (SELECT ledger_sequence, tx_index FROM page)) AS t
             USING (ledger_sequence, tx_index)
      ORDER BY p.ledger_sequence DESC, p.tx_index DESC, p.op_index DESC, p.event_index DESC`,
-    { contract: contractId, limit: EVENTS_PAGE, ...at },
+    {
+      contract: contractId,
+      limit: EVENTS_PAGE,
+      max: MAX_UINT32,
+      ...(at ?? { l: MAX_UINT32, t: MAX_UINT32, o: MAX_INT32, e: MAX_UINT32 }),
+    },
   );
   return {
     events: rows.map((e) => ({
@@ -248,13 +263,27 @@ export async function indexedActiveContracts(
   return rows.map((r) => ({ contractId: r.contract_id, calls: Number(r.calls) }));
 }
 
+/** Contracts with the most calls over the last `days` days, with how many accounts called them. */
+export async function indexedTopContracts(
+  days: number,
+  limit: number,
+): Promise<Array<{ contractId: string; calls: number; callers: number }>> {
+  const rows = await chQuery<{ contract_id: string; calls: string | number; callers: string | number }>(
+    `SELECT contract_id, count() AS calls, uniq(caller) AS callers FROM contract_calls
+     WHERE closed_at >= now() - INTERVAL {days:UInt32} DAY
+     GROUP BY contract_id ORDER BY calls DESC LIMIT {limit:UInt32}`,
+    { days, limit },
+  );
+  return rows.map((r) => ({ contractId: r.contract_id, calls: Number(r.calls), callers: Number(r.callers) }));
+}
+
 interface ChCreation {
   creator: string;
   closed_ts: number;
   ledger_sequence: number;
 }
 
-/** Who deployed the contract and when. Null when it predates the indexer. */
+/** Who deployed the contract and when. Null when the indexer doesn't know. */
 export async function indexedContractCreation(contractId: string): Promise<ContractCreation | null> {
   const [row] = await chQuery<ChCreation>(
     `SELECT creator, toUnixTimestamp(closed_at) AS closed_ts, ledger_sequence

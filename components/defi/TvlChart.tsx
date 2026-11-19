@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { BreakdownPanel } from "./BreakdownPanel";
 import { compactUsd } from "@/lib/format";
 import type { TvlBreakdownRow, TvlPoint } from "@/lib/stellar/defi";
 
@@ -13,9 +14,12 @@ const PAD_Y = 10;
 export function TvlChart({
   points,
   breakdown,
+  label = "Stellar DeFi total value locked",
 }: {
   points: TvlPoint[];
   breakdown?: Record<number, TvlBreakdownRow[]>;
+  /** What the chart shows, for screen readers. */
+  label?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -52,7 +56,7 @@ export function TvlChart({
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
         role="img"
-        aria-label={`Stellar DeFi total value locked over the last ${points.length} days, currently ${compactUsd(points[points.length - 1].tvl)}`}
+        aria-label={`${label} over the last ${points.length} days, currently ${compactUsd(points[points.length - 1].tvl)}`}
       >
         <defs>
           <linearGradient id="tvl-fill" x1="0" y1="0" x2="0" y2="1">
@@ -116,51 +120,7 @@ export function TvlChart({
               </div>
             );
           }
-          // panel sits beside the crosshair, never on top of it
-          const onLeft = rawPct > 50;
-          return (
-            <div
-              className={`pointer-events-none absolute top-1/2 z-10 w-52 -translate-y-1/2 rounded-lg border border-border bg-surface-2/95 p-2.5 backdrop-blur-md ${onLeft ? "-translate-x-full" : ""}`}
-              style={{
-                left: `calc(${rawPct}% ${onLeft ? "- 14px" : "+ 14px"})`,
-              }}
-            >
-              <div className="mb-1 flex items-baseline justify-between gap-2 border-b border-border pb-1 text-[11px]">
-                <span className="font-mono text-dim">
-                  {new Date(h.date * 1000).toISOString().slice(0, 10)}
-                </span>
-                <span className="font-mono">{compactUsd(h.tvl)}</span>
-              </div>
-              <div className="flex flex-col gap-[3px] pt-0.5">
-                {rows.map((row) => (
-                  <div
-                    key={row.slug}
-                    className="flex items-center justify-between gap-2 text-[11px] leading-4"
-                  >
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={row.logo}
-                        alt=""
-                        width={10}
-                        height={10}
-                        className="size-2.5 shrink-0 rounded-full"
-                        loading="lazy"
-                      />
-                      <span className="truncate">{row.name}</span>
-                    </span>
-                    <span className="shrink-0 font-mono">
-                      {compactUsd(row.tvl)}
-                      <span className="text-dim">
-                        {" "}
-                        {((row.tvl / h.tvl) * 100).toFixed(1)}%
-                      </span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
+          return <BreakdownPanel date={h.date} total={h.tvl} rows={rows} at={rawPct} />;
         })()}
     </div>
   );

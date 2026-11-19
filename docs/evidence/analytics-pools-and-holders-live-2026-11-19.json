@@ -1,0 +1,638 @@
+{
+  "capturedAt": "2026-11-19T14:01:42.267Z",
+  "network": "mainnet",
+  "purpose": "Read-only sample reconciliation; not final reviewer acceptance",
+  "indexerTip": {
+    "ledger": 65562135,
+    "closed_at": "2026-11-19 13:58:38"
+  },
+  "classic": {
+    "indexer": {
+      "pool_id": "a468d41d8e9b8f3c7209651608b74b7db7ac9952dcae0cdf24871d1d9c7b0088",
+      "asset_a": "native",
+      "asset_b": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "reserve_a": "116936884088307",
+      "reserve_b": "16131582968754",
+      "total_shares": "32056528543905",
+      "fee_bp": 30,
+      "last_modified_ledger": 65562125
+    },
+    "reference": {
+      "_links": {
+        "self": {
+          "href": "https://horizon.stellar.org/liquidity_pools/a468d41d8e9b8f3c7209651608b74b7db7ac9952dcae0cdf24871d1d9c7b0088"
+        },
+        "transactions": {
+          "href": "https://horizon.stellar.org/liquidity_pools/a468d41d8e9b8f3c7209651608b74b7db7ac9952dcae0cdf24871d1d9c7b0088/transactions{?cursor,limit,order}",
+          "templated": true
+        },
+        "operations": {
+          "href": "https://horizon.stellar.org/liquidity_pools/a468d41d8e9b8f3c7209651608b74b7db7ac9952dcae0cdf24871d1d9c7b0088/operations{?cursor,limit,order}",
+          "templated": true
+        }
+      },
+      "id": "a468d41d8e9b8f3c7209651608b74b7db7ac9952dcae0cdf24871d1d9c7b0088",
+      "paging_token": "a468d41d8e9b8f3c7209651608b74b7db7ac9952dcae0cdf24871d1d9c7b0088",
+      "fee_bp": 30,
+      "type": "constant_product",
+      "total_trustlines": "829",
+      "total_shares": "3205652.8543905",
+      "reserves": [
+        {
+          "asset": "native",
+          "amount": "11693688.4088307"
+        },
+        {
+          "asset": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+          "amount": "1613158.2968754"
+        }
+      ],
+      "last_modified_ledger": 65562125,
+      "last_modified_time": "2026-11-19T13:57:48Z"
+    },
+    "referenceUrl": "https://horizon.stellar.org/liquidity_pools/a468d41d8e9b8f3c7209651608b74b7db7ac9952dcae0cdf24871d1d9c7b0088",
+    "capturedAt": "2026-11-19T13:59:22.491Z"
+  },
+  "soroswap": {
+    "indexer": {
+      "contract_id": "CATUJXDUO7SSSTAKSUV5YU6RSTB4B5AVIHQDV26QTCXOB46T6SLMWNMY",
+      "soroswap": 1,
+      "reserves": "{\"map\":[{\"key\":{\"symbol\":\"new_reserve_0\"},\"val\":{\"i128\":\"13808857215892\"}},{\"key\":{\"symbol\":\"new_reserve_1\"},\"val\":{\"i128\":\"1748697885490\"}}]}",
+      "reserve_ledger": 65562123
+    },
+    "reference": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "entries": [
+          {
+            "key": "AAAABgAAAAEnRNx0d+UpTAqVK9xT0ZTDwPQVQeA669CYruDz0/SWywAAABQAAAAB",
+            "xdr": "AAAABgAAAAAAAAABJ0TcdHflKUwKlSvcU9GUw8D0FUHgOuvQmK7g89P0lssAAAAUAAAAAQAAABMAAAAAGAUUVoFrZvEudzpW93xXlPrBsft6tuItT61aQSdw9z4AAAABAAAABwAAAAMAAAAAAAAAEgAAAAEltPzYWa7C+mNIQ4xImzw8EMmLbSG+T9PLMMtolT75dwAAAAMAAAABAAAAEgAAAAHmp9nrdSMAakaap0g60RByR0Q8DYLmJ2PeZwhIxOl8kAAAAAMAAAACAAAACgAAAAAAAAAAAAAMjyAHc5QAAAADAAAAAwAAAAoAAAAAAAAAAAAAAZcmhCsyAAAAAwAAAAQAAAASAAAAAThyQmvVnkphWFCG44htRXkDtT8i+J42HqgG/8sHrHGfAAAADwAAAAhNRVRBREFUQQAAABEAAAABAAAAAwAAAA8AAAAHZGVjaW1hbAAAAAADAAAABwAAAA8AAAAEbmFtZQAAAA4AAAAdbmF0aXZlLUVVUkMgU29yb3N3YXAgTFAgVG9rZW4AAAAAAAAPAAAABnN5bWJvbAAAAAAADgAAABduYXRpdmUtRVVSQy1TT1JPU1dBUC1MUAAAAAAQAAAAAQAAAAEAAAAPAAAAC1RvdGFsU3VwcGx5AAAAAAoAAAAAAAAAAAAABDrChVLR",
+            "lastModifiedLedgerSeq": 65562123,
+            "liveUntilLedgerSeq": 66071531,
+            "extXdr": "AAAAAA=="
+          }
+        ],
+        "latestLedger": 65562157
+      }
+    },
+    "referenceUrl": "https://rpc.mainnet.stellar.gateway.fm",
+    "method": "getLedgerEntries",
+    "storageSchema": "https://github.com/soroswap/core/blob/main/contracts/pair/src/storage.rs",
+    "capturedAt": "2026-11-19T14:00:31.400Z"
+  },
+  "holders": {
+    "indexer": {
+      "asset": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "holders": "734051",
+      "supply": "3312003528026610"
+    },
+    "top100": [
+      {
+        "rank": 1,
+        "holder": "CALFCZ4TY2CLHDHNJWCZX6JKYGUPV7P3GNQ3UVABXNE5JCV2E774APUM",
+        "balance": "588517354613047"
+      },
+      {
+        "rank": 2,
+        "holder": "GAPQZLGAUN6DOCHGVGTIHW3OCCCAZHGXIRLMKH76Z7764CINF4P7LBD4",
+        "balance": "402935809697977"
+      },
+      {
+        "rank": 3,
+        "holder": "GCTSFIICPYZW2R6HWA25IWDHQYSFBJJUAXVYHGUQ7K64G54ZQ6OOJUF6",
+        "balance": "316991142722324"
+      },
+      {
+        "rank": 4,
+        "holder": "GAPV2C4BTHXPL2IVYDXJ5PUU7Q3LAXU7OAQDP7KVYHLCNM2JTAJNOQQI",
+        "balance": "220197934500000"
+      },
+      {
+        "rank": 5,
+        "holder": "GDWL5I6SENNVRK7PS7U3CRXIQTWHLFPSBXCGA3TWKTK7AQ7XO6FBXDFG",
+        "balance": "154264034391471"
+      },
+      {
+        "rank": 6,
+        "holder": "GDSQAEHJLE2ZZMQZ47YWLP3O2HVPYQ4QCFWTHUKMKF6RIX2ZJJDDMK4N",
+        "balance": "86102469700000"
+      },
+      {
+        "rank": 7,
+        "holder": "CAJJZSGMMM3PD7N33TAPHGBUGTB43OC73HVIK2L2G6BNGGGYOSSYBXBD",
+        "balance": "79845863738344"
+      },
+      {
+        "rank": 8,
+        "holder": "GAFK7XFZHMLSNV7OJTBO7BAIZA66X6QIBV5RMZZYXK4Q7ZSO52J5C3WQ",
+        "balance": "58266489059377"
+      },
+      {
+        "rank": 9,
+        "holder": "GCUKPLOBWDABI2TM6RCFVM3TRIVQJJOT7ZRGO7FEC5GGDJQZ6NI7PWRB",
+        "balance": "51931690800000"
+      },
+      {
+        "rank": 10,
+        "holder": "CDMH535JSD224YXPET3B4SJOLXTQQ24GRSCWACGYBKSH2DKFJYWI7SUW",
+        "balance": "35328876646911"
+      },
+      {
+        "rank": 11,
+        "holder": "CCLWL5NYSV2WJQ3VBU44AMDHEVKEPA45N2QP2LL62O3JVKPGWWAQUVAG",
+        "balance": "30832198362078"
+      },
+      {
+        "rank": 12,
+        "holder": "GBBMYQU53NNJTC65C5II2E3AFS7KBR43R3G6TZ56VFOPHN5EOUWPB4BL",
+        "balance": "30000026800000"
+      },
+      {
+        "rank": 13,
+        "holder": "GABFRFPYM2BXM4OM2ZA4YDBWY4CMPVESHQMKXSM47MWWJD4TW2KQDWWN",
+        "balance": "29262599263716"
+      },
+      {
+        "rank": 14,
+        "holder": "CD7ZJUQEJODTJXWJMDJRV7UHCANOBX3FC6KXJV3DMIFX3JXUWMF3U3T5",
+        "balance": "21661401320583"
+      },
+      {
+        "rank": 15,
+        "holder": "GD6J2USGBTF64IUYXKU2CAJLEPH3J2NG2CVTRFZXAMT3ZYEEBYE5WUXU",
+        "balance": "20132691006379"
+      },
+      {
+        "rank": 16,
+        "holder": "CDMJRRH5MAJLB7T5SQAWQOOL7UJ3BABGTURSVKIE6AEDSXESDDJIBVCT",
+        "balance": "20012727229672"
+      },
+      {
+        "rank": 17,
+        "holder": "GAXKIZGOZ4QKIHDGCWSJO6FOYIS6U2P4GJNJ6L2MFZ7R7QQJXEONYYVT",
+        "balance": "19194553189491"
+      },
+      {
+        "rank": 18,
+        "holder": "CBVHBZSZOS6KRDJ4D44FU2YLIENOVSSLM3UGKW6XQMVIFUAMWIWCVH2U",
+        "balance": "17152962958666"
+      },
+      {
+        "rank": 19,
+        "holder": "GB33O7V4PSLEV5Y725V3CBCM4WPW6YYJIDA27YUYRKA76LK2ZBNMJREW",
+        "balance": "16706443213855"
+      },
+      {
+        "rank": 20,
+        "holder": "GDBK3AHPQ7AO2U7JYEBFGJ2PBDVVFANHH4NQANDX6Q4GZ266WZ3IOIXN",
+        "balance": "16652984569222"
+      },
+      {
+        "rank": 21,
+        "holder": "GDJ7WZYSJOD635OOC2VXJUGCZBQAGSGFYG4Q6FL3A62JVPBE2NVISXAJ",
+        "balance": "14738129798959"
+      },
+      {
+        "rank": 22,
+        "holder": "GBAIA5U6E3FSRUW55AXACIVGX2QR5JYAS74OWLED3S22EGXVYEHPLGPA",
+        "balance": "12359072920000"
+      },
+      {
+        "rank": 23,
+        "holder": "CA6PUJLBYKZKUEKLZJMKBZLEKP2OTHANDEOWSFF44FTSYLKQPIICCJBE",
+        "balance": "12352710202724"
+      },
+      {
+        "rank": 24,
+        "holder": "CCKGQSQG5JLZBMYMB4HT6M4H7FUC3NK5C75MIHN6627LRAY5B2SYL2AD",
+        "balance": "11424259732275"
+      },
+      {
+        "rank": 25,
+        "holder": "GAQZU7Y7GB3E4XOA3ZXEZDOTIEIWQRYOAIVJ6STY2YTUQAGZL3GYJCXG",
+        "balance": "11261592410906"
+      },
+      {
+        "rank": 26,
+        "holder": "CCX2TYR4AQTPPMTZOIMP3YIBHAYLLSTXVP47PAGTL753PCQFSKV32MIA",
+        "balance": "10972143319996"
+      },
+      {
+        "rank": 27,
+        "holder": "GAUA7XL5K54CC2DDGP77FJ2YBHRJLT36CPZDXWPM6MP7MANOGG77PNJU",
+        "balance": "10771943859702"
+      },
+      {
+        "rank": 28,
+        "holder": "CAHEWHOPPDBQYFMAOLDOXXGUX2BCR7EXP4CWYCRY3NEAJB35YPZMMJFF",
+        "balance": "10763889286183"
+      },
+      {
+        "rank": 29,
+        "holder": "CAFHLHGZXOVNCGFJ7DOXL7JDNMBCEZKDI3LS5NRQH3GXC7CSIMQZHUSM",
+        "balance": "10182440774927"
+      },
+      {
+        "rank": 30,
+        "holder": "GBWCSBNDNPY6JADX3SATMBSUS65ZUQWLFEEAMM77ZCWZLXSTWPPSKPGE",
+        "balance": "10000001600000"
+      },
+      {
+        "rank": 31,
+        "holder": "CCJ3XJR5VODGJHH6BQHRUVOA3FWMQRQOPLUZNKLSKFKYELZF767P2DOR",
+        "balance": "9995254305097"
+      },
+      {
+        "rank": 32,
+        "holder": "GDXYRI6IONQA5YTGRLQ6O3FGJ2BWXPJTTQPUXFPSEXSRKBZLFKMZSOLP",
+        "balance": "9795270363342"
+      },
+      {
+        "rank": 33,
+        "holder": "GDYLPQQXALAUC4OAHAHXKAVGEIA2RJBLIDC4OLVEFRUBHY73B3ND2TQX",
+        "balance": "9226214906326"
+      },
+      {
+        "rank": 34,
+        "holder": "GA5XR63I526UNF3TBYDZ2SDMTFVC2ICHJQGIUKMR6A2FKSGZUKRYV5KN",
+        "balance": "9156084400000"
+      },
+      {
+        "rank": 35,
+        "holder": "CBBMQBNHB2FYVZYV7VNHOJHUMTFJLR4PUMRVQYNW6RHIKZO2NQMIBUCV",
+        "balance": "9065967570627"
+      },
+      {
+        "rank": 36,
+        "holder": "GBTQYYDAHVKKDKROZY7YHRPH6R6SDQI2DAGHJF5Y6GKCA732RMTJEPSB",
+        "balance": "8898561836560"
+      },
+      {
+        "rank": 37,
+        "holder": "CAU6D6VOQZ7RS76PIP7JJQR7O66WBIEPDMBVMYPJTVDU6KF67WJ65DXA",
+        "balance": "8641228586263"
+      },
+      {
+        "rank": 38,
+        "holder": "GAYXNQAATBNITJHGVVJVJ54LEYXXNBK2LRSAE3PNOYZAIYJQRS7QJLOR",
+        "balance": "7544237420884"
+      },
+      {
+        "rank": 39,
+        "holder": "GCD7C2KKSJOPFCULJ4ESBIEMJBJBYT7QDAJJUQOSORT5XOEW3AMCBY5M",
+        "balance": "7312872260000"
+      },
+      {
+        "rank": 40,
+        "holder": "CCYMZTOJIDZY45XGDBUNRMYUZWBUTNWOAMREAW4JYU7GEKDHLOEOJX25",
+        "balance": "7177032315041"
+      },
+      {
+        "rank": 41,
+        "holder": "CCL3WITWFFXIHV2I52ECV5DPIEOFSTU3PBPR53ILPLF2IP5KHECXRUTY",
+        "balance": "6815220193415"
+      },
+      {
+        "rank": 42,
+        "holder": "GC2VWS32ESUQJ5K2K5KQ7NUTCY4XHGVUHWTU7T5KH664PWWFZDERSSTA",
+        "balance": "6192727627824"
+      },
+      {
+        "rank": 43,
+        "holder": "GDS2ICQPYYDPOJJKACDUXCALJPDNRRGYU6CMM35PCUWPV4DVV7MO5ZUE",
+        "balance": "5689716898391"
+      },
+      {
+        "rank": 44,
+        "holder": "CAAMRQZ5W24TKAJIIP6DZZE3OWRVKVW4MTD6ZMGERMDJRZALFUETZVGE",
+        "balance": "5453997498691"
+      },
+      {
+        "rank": 45,
+        "holder": "GAWJO3QO4Q4ZOHAF53G7RAP7I7OATZP5X6VUE3DKJNUBRC7AJBJ2AMSL",
+        "balance": "5266666244150"
+      },
+      {
+        "rank": 46,
+        "holder": "GA66FGWEROFGILL2DGFG7WVIADAILU3PZMQB5JTM4DJQZOC5XTPJSM6N",
+        "balance": "5062444154740"
+      },
+      {
+        "rank": 47,
+        "holder": "GBWYUIGVIHLZLOZYMRSP3F777DNY3G2UQN7RA5T2PGJPR3KZIJLKFTCX",
+        "balance": "5038005471303"
+      },
+      {
+        "rank": 48,
+        "holder": "GBN3BGDKJRMNSTDJTKFAP4KT67IF3WSBFTU5LYKMDNUW24PRRDTTEZIL",
+        "balance": "4962218200003"
+      },
+      {
+        "rank": 49,
+        "holder": "GAVPJ7GEFWIM7MOI2RUIMX5MV7PVK4W2OZQJVYNJXX6YNR2VXJW4R555",
+        "balance": "4870637479604"
+      },
+      {
+        "rank": 50,
+        "holder": "GASB5JDZWZDSODK7OKMQI747BVWALFB3OCY2A4FRRW4OI4YOP4CU6CAF",
+        "balance": "4762865805554"
+      },
+      {
+        "rank": 51,
+        "holder": "GA22MHPWUODDYFSQMQ3I6BJAHEJCDLEPOIYG5RP47LLIO3YV3KPSIVXV",
+        "balance": "4559163108892"
+      },
+      {
+        "rank": 52,
+        "holder": "GA5HMELT2MF2DG4OH2YH64CYN6M2MOJPLNBVHNVZSZZZJH4I4MX4SFMR",
+        "balance": "4384100152491"
+      },
+      {
+        "rank": 53,
+        "holder": "GAH5L6B5Q7NK72WEPVLWRJ2JEESK63O5TA5CXVJVDWJNAKTSA3VNGNVR",
+        "balance": "4122428395067"
+      },
+      {
+        "rank": 54,
+        "holder": "GBZA2XWTTBO7DF7J2X3AEATUFX44PPBHGORJRJEQTLT4BWAYPPGYPS7N",
+        "balance": "3737138175894"
+      },
+      {
+        "rank": 55,
+        "holder": "GDOTCV3NVGGBA6PPFLTE7PGP42POCTFCMSPAVX7A3KWZE57EYN6OFXEZ",
+        "balance": "3488963440001"
+      },
+      {
+        "rank": 56,
+        "holder": "GCB5A3ZSXFG7ILMG5FZNSU5XBYA6457E5HVBEQRF3Y4ZBNHFGJIM2IRL",
+        "balance": "3476920418347"
+      },
+      {
+        "rank": 57,
+        "holder": "CC22BLZAFTS7M6Z25HOMKDLV65PBP5CIHFER2OTZB5IRNL3YBWDXKDFF",
+        "balance": "3325400369120"
+      },
+      {
+        "rank": 58,
+        "holder": "GBCIUFXY7DKOLMZDI4D4S6H5QYQDNQ2FTFUKW2YKRCZNVXXD4JFDHAZ5",
+        "balance": "3197053692333"
+      },
+      {
+        "rank": 59,
+        "holder": "GD5KWG6A3T2VBD2YROZJSVOT3FZLVYUOIQO2VOEIDYQ4HUCMXF5BPRK5",
+        "balance": "2994194500000"
+      },
+      {
+        "rank": 60,
+        "holder": "GDW3AVFPQ7WUOUANUAPUMKXQYVYLZ4KIDGEEOKPNEVH6TALXP2TEE3GK",
+        "balance": "2911570700000"
+      },
+      {
+        "rank": 61,
+        "holder": "CA75VVHLWSM7W6ULNQI7ZJYDFOMQCCPKIDDDHBAL5KOKHWWKWQ5S7MHO",
+        "balance": "2813803100011"
+      },
+      {
+        "rank": 62,
+        "holder": "CC7CDFY2VGDODJ7WPO3JIK2MXLOAXL4LRQCC43UJDBAIJ4SVFO3HNPOC",
+        "balance": "2728304754590"
+      },
+      {
+        "rank": 63,
+        "holder": "CCWNKTTMHZ4VRR3FYQT3G253MHOGRLUEVTO6YPENM7ZN65DGC345LHI6",
+        "balance": "2658564710985"
+      },
+      {
+        "rank": 64,
+        "holder": "GAKVS3Z6WN3OIB35OVQFP7NZ2JFOYIHR3E6AS64IQLS7PJP4I5ZL4XVT",
+        "balance": "2522693403088"
+      },
+      {
+        "rank": 65,
+        "holder": "GBEY2UEFTAR3C23KOPH5WHOEOUCXDL3BBLVUKKOY3IEWMRETLJ4LRKZ5",
+        "balance": "2500001700000"
+      },
+      {
+        "rank": 66,
+        "holder": "GBHQGUE2TKLA5TVKJ7YJMDL3GXG4HV4SQ4QW7CZDWWPJX4BZ74QLJTJM",
+        "balance": "2465077159064"
+      },
+      {
+        "rank": 67,
+        "holder": "GB3Q5ZJSZ26UMPHQMFRGNLCPMF2O23WUFRZIITNPCMIIXHHY5JXXXRP6",
+        "balance": "2394391700000"
+      },
+      {
+        "rank": 68,
+        "holder": "GANXNWT6BXTLRPRV77UAZRQUZOTXGYT67MLY4SW2P5NU3E2IORCOJJ7V",
+        "balance": "2393775072725"
+      },
+      {
+        "rank": 69,
+        "holder": "GBQ3QJIXRF7T4WKBN6JNVVLMACM6C6SOENL4FXQNSFUH6BJMQSNJI6GM",
+        "balance": "2351233125821"
+      },
+      {
+        "rank": 70,
+        "holder": "GCWGG5SXHS3362SYGNTPJCFKV6LS3F4TGJQMOL72JMOBS2XWIJ7Z6HW2",
+        "balance": "2260100025824"
+      },
+      {
+        "rank": 71,
+        "holder": "GBMIMV7HOB2MKNGZWZQM2U3DN7MHS3XLYMHOBTGL5DOTUN5RIHHE4W7B",
+        "balance": "2190000000000"
+      },
+      {
+        "rank": 72,
+        "holder": "GCFONPVSRFKSMPLD5QEKNTTCYAVJZYMCF3M7YLTFE3I4WOFIRIZ2UGZ2",
+        "balance": "2182867181791"
+      },
+      {
+        "rank": 73,
+        "holder": "GBTJKVMCK6223NIPHME6QZTAKSDEUONUQ6NDG44C2LPYCB354ILGHIPR",
+        "balance": "2142033294641"
+      },
+      {
+        "rank": 74,
+        "holder": "CA6GAFOJCW4MGQQBUCQUSA3CLIH25G4SNKB2JHYKZCVWZTNW5VXMSC4O",
+        "balance": "2005797051987"
+      },
+      {
+        "rank": 75,
+        "holder": "CAC56QNJ2CX456TPC5S4MSOU3DBULG4TGN7AZ2SAYGBLD3GICFMZBIT2",
+        "balance": "2004409206523"
+      },
+      {
+        "rank": 76,
+        "holder": "GAFWV3TASNX6VNMOZVYRBNWIFR3F3PG37UFKMJ4MD42F77NM62W7AYSB",
+        "balance": "1998271637517"
+      },
+      {
+        "rank": 77,
+        "holder": "GDMKMOHKKYS4VTHBCH4TZXNFF7MK7KDA7IEZL6NB36JREVCRNYZJXPTA",
+        "balance": "1939628322082"
+      },
+      {
+        "rank": 78,
+        "holder": "CAPIOQNULTKVYOJT6X2W2XKGNIVUWZDY72Y42YG6HQKJ7DU7YTHIDQYX",
+        "balance": "1933843983611"
+      },
+      {
+        "rank": 79,
+        "holder": "GDQE7YHNL7L7M664GJXU5VVEIBTYG44O3PHWVZCZJZQ2FDFO4S2XGAFE",
+        "balance": "1779486700000"
+      },
+      {
+        "rank": 80,
+        "holder": "GAID26P724IOJPPQAOC5EDBMYY5VGNEFP5XDXIGX6H6QMFWCUY3JBGBX",
+        "balance": "1740688099047"
+      },
+      {
+        "rank": 81,
+        "holder": "GAPLASZ4BHDKWM5RMIDL6E5Z4T7MEG7KNR4BAFB2GQYKTJNLKMIP4DYS",
+        "balance": "1736504900000"
+      },
+      {
+        "rank": 82,
+        "holder": "GBQZIOADTIHYU2YFCPZW576PBWLGF3WYI37TCFA7SJ5XMWAYJ6NFKCVA",
+        "balance": "1718658103599"
+      },
+      {
+        "rank": 83,
+        "holder": "CCR2CH4GQVCZHG7CHFVMNANCK45CU5DVKXZIIITDZQAU3CEJZ7RQH2MQ",
+        "balance": "1712117971003"
+      },
+      {
+        "rank": 84,
+        "holder": "GAYR4QPPZG4I765OW34AIWRHMDRQJAPWHSMFQWTB72UDWT3OALSCK4FO",
+        "balance": "1693889552855"
+      },
+      {
+        "rank": 85,
+        "holder": "GCCBKN3X3QC76JBQ5E5WNEVW4KYYJPBYO3UD25DTQNQYOOOSG3ISLHCM",
+        "balance": "1682570250347"
+      },
+      {
+        "rank": 86,
+        "holder": "GB3FQB7JYQ37PVYL3DE7ZWYMQCDXZFQBLA23HHJOYA3MIOHCSLT3BCYY",
+        "balance": "1639056201313"
+      },
+      {
+        "rank": 87,
+        "holder": "GBSKUZMBOPXDZEF7N5AH324IUR7BNZJFS7OMPIRV75WT6DXHUWVBFRIY",
+        "balance": "1557313090000"
+      },
+      {
+        "rank": 88,
+        "holder": "GBWDRQ2R7OOIXEH3F3MVJH45W57EY47A6U2JZ5XOUMF5NURIAM5SYOK6",
+        "balance": "1555146300000"
+      },
+      {
+        "rank": 89,
+        "holder": "GAFBNJTWT6WX3A65IY62ZOUWPFC5VQAHC5PCB5SV23ZKOMHKEFJFQSGC",
+        "balance": "1531783738250"
+      },
+      {
+        "rank": 90,
+        "holder": "GAGBHY4OLZLR4EZTCVHN6PIWPJBQEZU24MUZCEWM7C7MOOBSXMCHONK7",
+        "balance": "1501324750300"
+      },
+      {
+        "rank": 91,
+        "holder": "GAQ5LDAAZMIYOP7R5CXTQX7PTCLJWRQCVIYX7M5IRY227TII4CLAOESO",
+        "balance": "1500012700000"
+      },
+      {
+        "rank": 92,
+        "holder": "GDZD5YMYDDM226RLTKZH5XAISACPED7FO6YNE5KRPLRM3CYFUUEQ6AFA",
+        "balance": "1500009007318"
+      },
+      {
+        "rank": 93,
+        "holder": "GDUNB6SGNYCGOQCNK44HGM7JXAJDCHU6ZYWUXKCI4S6UDQQ3AE7SAXBM",
+        "balance": "1490000000000"
+      },
+      {
+        "rank": 94,
+        "holder": "GBJDAMOS67FPAY5TIHAURQX6XJ3AUMVHXDZN356FD6GA6PZ332AISUV7",
+        "balance": "1370838900000"
+      },
+      {
+        "rank": 95,
+        "holder": "CC2WWGEKJ6HT6FGCQ6QDES7EWUW6BNHMWQ2CHYNUZON6FZ24LYN5EREC",
+        "balance": "1341987466245"
+      },
+      {
+        "rank": 96,
+        "holder": "GDD62C7ULUDP4X6BYC33CENPABIQBYJFY52MU6OR266UF3GCZWEE7BDP",
+        "balance": "1319532500000"
+      },
+      {
+        "rank": 97,
+        "holder": "GBFECMJNPWZ3HB2IUCQVZB7PLLOEFETFEM4NZF42V7ALA7ER63WZHL4R",
+        "balance": "1302926700000"
+      },
+      {
+        "rank": 98,
+        "holder": "GC5TLNN5SE35AG3QJS3VMMEBNGPGWWWC5ADGKCXT2PVSIO7A3AO7TBMG",
+        "balance": "1286342762586"
+      },
+      {
+        "rank": 99,
+        "holder": "CAXYSVTPAU6JLPI7V6XJWLFWIYMFIHHFF7D7QCFH2YB2Z4BSI3BCGGH4",
+        "balance": "1263875542845"
+      },
+      {
+        "rank": 100,
+        "holder": "GAECLCAN5CZVNI5ZWWGBNDPMWPQXZMYCGCXRHEEJC4WW33D4LXYUISHB",
+        "balance": "1209113500000"
+      }
+    ],
+    "reference": {
+      "_links": {
+        "toml": {
+          "href": "https://circle.com/.well-known/stellar.toml"
+        }
+      },
+      "asset_type": "credit_alphanum4",
+      "asset_code": "USDC",
+      "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      "paging_token": "USDC_GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN_credit_alphanum4",
+      "contract_id": "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
+      "num_claimable_balances": 1917,
+      "num_liquidity_pools": 910,
+      "num_contracts": 47161,
+      "accounts": {
+        "authorized": 2561251,
+        "authorized_to_maintain_liabilities": 1,
+        "unauthorized": 0
+      },
+      "claimable_balances_amount": "33316.9162701",
+      "liquidity_pools_amount": "1851068.3710030",
+      "contracts_amount": "95116656.6108104",
+      "balances": {
+        "authorized": "234345143.0997915",
+        "authorized_to_maintain_liabilities": "979527.0363342",
+        "unauthorized": "0.0000000"
+      },
+      "flags": {
+        "auth_required": false,
+        "auth_revocable": true,
+        "auth_immutable": false,
+        "auth_clawback_enabled": false
+      }
+    },
+    "referenceUrl": "https://horizon.stellar.org/assets?asset_code=USDC&asset_issuer=GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN&limit=1",
+    "note": "Holder counts/supply snapshots differ from Horizon; no claim of an exact independent ranking or supply match."
+  },
+  "unverified": [
+    "Rendered browser pages and interactions",
+    "Pool USD valuation against independent prices",
+    "Volume over aligned intervals",
+    "DeFi protocol/chain totals and provider comparison",
+    "Independent top-100 holder ranking",
+    "Live Aquarius coverage",
+    "Reviewer-selected examples"
+  ]
+}

@@ -1,3 +1,4 @@
+import { analyticsPublic } from "./analytics-responses";
 import { Address, xdr } from "@stellar/stellar-sdk";
 import {
   ACCOUNT,
@@ -45,6 +46,7 @@ export const upstreamOrigins = [
   "https://api.coingecko.com",
   "https://api.stellar.expert",
   "https://api.llama.fi",
+  "https://registry.npmjs.org",
   "https://clickhouse.indexer.e2e.invalid",
   "https://api.indexer.e2e.invalid",
 ];
@@ -82,6 +84,16 @@ export function responseFor(
   rawBody?: unknown,
   headers: RequestHeaders = {},
 ): FixtureResponse {
+  const analytics = analyticsPublic(url, method, rawBody);
+  if (analytics) return analytics;
+  // Next 16.4's optional upgrade assessment asks npm for advisories during
+  // builds. Model an OFFLINE assessment, not a successful vulnerability scan.
+  if (
+    url.origin === "https://registry.npmjs.org" &&
+    url.pathname === "/-/npm/v1/security/advisories/bulk" &&
+    method === "POST"
+  )
+    return unavailable();
   const indexer = indexerResponseFor(url, method, rawBody, headers);
   if (indexer) return indexer;
   if (
@@ -325,6 +337,16 @@ export function responseFor(
         /^\/(tvl|protocol|summary\/dexs)\/[a-z0-9-]+$/.test(url.pathname))
     )
       return unavailable();
+    // protocol logos on the DeFi pages: a plain circle stands in
+    if (
+      url.origin === "https://icons.llamao.fi" &&
+      /^\/icons\/protocols\/[a-z0-9-]+$/.test(url.pathname)
+    )
+      return {
+        status: 200,
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="#888"/></svg>',
+      };
   }
   throw new Error(`Unhandled fixture request: ${method} ${url.href}`);
 }

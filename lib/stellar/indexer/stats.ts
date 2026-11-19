@@ -12,19 +12,30 @@ export interface DayCount {
 
 const unixDay = (day: string) => Date.parse(`${day}T00:00:00Z`) / 1000;
 
-/**
- * New accounts per day over the last `days` complete days. Today is still
- * filling up and the first indexed day started mid-day, so both are left out.
- */
+/** New accounts per day over the last `days` complete days. Today is still filling up. */
 export async function indexedNewAccounts(days: number): Promise<DayCount[]> {
   const rows = await chQuery<{ day: string; new_accounts: string | number }>(
     `SELECT day, new_accounts FROM daily_stats FINAL
      WHERE day >= today() - {days:UInt32} AND day < today()
-       AND day > (SELECT min(day) FROM daily_stats)
      ORDER BY day`,
     { days },
   );
   return rows.map((r) => ({ date: unixDay(r.day), count: Number(r.new_accounts) }));
+}
+
+/**
+ * UTC days indexed from their first ledger over the last `days` days, oldest
+ * first. The day the index started partway through is left out.
+ */
+export async function indexedLedgerDays(days: number): Promise<string[]> {
+  const rows = await chQuery<{ day: string }>(
+    `SELECT toString(toDate(closed_at)) AS day FROM ledgers
+     WHERE closed_at >= today() - {days:UInt32}
+     GROUP BY day HAVING min(closed_at) < toStartOfDay(min(closed_at)) + 60
+     ORDER BY day`,
+    { days },
+  );
+  return rows.map((r) => r.day);
 }
 
 /**
@@ -60,4 +71,53 @@ export async function indexedAccountTotals(): Promise<IndexedAccountTotals | nul
   );
   if (!row || !Number(row.total)) return null;
   return { total: Number(row.total), newOnDay: Number(row.created) };
+}
+
+export interface ChNetworkDay {
+  day: string;
+  transactions: string | number;
+  failed_transactions: string | number;
+  soroban_transactions: string | number;
+  operations: string | number;
+  operations_by_type: Record<string, string | number>;
+  active_accounts: string | number;
+  /** Stroops. */
+  fees_charged: string | number;
+  new_accounts: string | number;
+  new_contracts: string | number;
+  contract_calls: string | number;
+  token_transfers: string | number;
+}
+
+/** The network's numbers for each complete UTC day over the last `days` days. */
+export async function indexedNetworkDays(days: number): Promise<ChNetworkDay[]> {
+  return chQuery<ChNetworkDay>(
+    `SELECT day, transactions, failed_transactions, soroban_transactions, operations, operations_by_type,
+            active_accounts, fees_charged, new_accounts, new_contracts, contract_calls, token_transfers
+     FROM daily_stats FINAL
+     WHERE day >= today() - {days:UInt32} AND day < today()
+     ORDER BY day`,
+    { days },
+  );
+}
+
+/**
+ * What Soroban transactions paid in fees each UTC day from `from` up to, not
+ * including, `to` (YYYY-MM-DD), in stroops. It sums every transaction of those
+ * days, about 6 million a day, so the caller asks a few days at a time. The
+ * days are found in `ledgers` first: transactions is sorted by ledger, not time.
+ */
+export async function indexedSorobanFees(
+  from: string,
+  to: string,
+): Promise<Array<{ day: string; fees: string }>> {
+  return chQuery<{ day: string; fees: string }>(
+    `SELECT toString(toDate(closed_at)) AS day, toString(sumIf(fee_charged, soroban)) AS fees
+     FROM transactions
+     WHERE ledger_sequence BETWEEN
+             (SELECT ifNull(minOrNull(sequence), {max:UInt32}) FROM ledgers WHERE closed_at >= {from:Date})
+         AND (SELECT ifNull(minOrNull(sequence), {max:UInt32}) FROM ledgers WHERE closed_at >= {to:Date}) - 1
+     GROUP BY day`,
+    { from, to, max: 0xffffffff },
+  );
 }

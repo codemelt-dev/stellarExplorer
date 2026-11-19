@@ -35,12 +35,12 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     {
-      source: "/(tx|ledger|account|contract)/:path*",
+      source: "/(tx|ledger|account|contract|transactions)/:path*",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },
       ],
     },
-    "/api/(accounts|contracts|tx)/:path*",
+    "/api/(accounts|assets|contracts|tx)/:path*",
   ],
 };

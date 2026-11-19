@@ -25,16 +25,20 @@ export function Address({
   const href =
     kind === "contract"
       ? `/contract/${address}`
-      : kind === "unknown"
-        ? null
-        : `/account/${address}`;
+      : kind === "liquidityPool"
+        ? `/pool/${address}`
+        : kind === "unknown"
+          ? null
+          : `/account/${address}`;
 
   const kindLabel =
     kind === "contract"
       ? "Smart contract"
-      : kind === "muxedAccount"
-        ? "Muxed account"
-        : "Account";
+      : kind === "liquidityPool"
+        ? "Liquidity pool"
+        : kind === "muxedAccount"
+          ? "Muxed account"
+          : "Account";
 
   const key = (
     <span

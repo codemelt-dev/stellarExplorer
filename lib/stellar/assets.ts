@@ -3,19 +3,23 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { Asset, Horizon, Networks } from "@stellar/stellar-sdk";
 import { horizon } from "./horizon";
-import { getXlmMarket } from "./market";
 import { fetchTomlOrgInfo } from "./toml";
 import { NotFoundError } from "./transactions";
 import { assetKey, fromAssetKey, type AssetIdentity } from "./assetId";
 import { indexerActive, indexerRead, withIndexer } from "./indexer/client";
+import { indexedPricePools } from "./indexer/prices";
+import { buildPriceBook, orderBookPrice } from "./prices";
 import {
   indexedAsset,
   indexedAssets,
+  indexedHolderLinks,
   indexedListedAssets,
+  indexedToken,
   indexedTokenActivity,
   indexedTopHolders,
   indexedXlmPrice,
   type IndexedHolder,
+  type IndexedHolderLink,
 } from "./indexer/assets";
 
 export type AssetRecord = Horizon.ServerApi.AssetRecord;
@@ -155,11 +159,45 @@ export const getTopHolders = cache(
     indexerRead("top holders", () => indexedTopHolders(assetKey(identity), limit)),
 );
 
+/** Holders and supply of a Soroban-only token, indexer only. Null when off, failed or not indexed. */
+export const getToken = cache((contractId: string) =>
+  indexerRead("token", () => indexedToken(contractId)),
+);
+
+export type { IndexedHolderLink as HolderLink };
+
+/**
+ * How far back transfers between top holders count as a link. With the full
+ * history indexed, 90 days of the top holders' transfers ran past the timeout
+ * on the busiest assets; 30 is about what the index held before the backfill.
+ */
+export const HOLDER_LINK_DAYS = 30;
+
+// a few seconds on the busiest assets, and the ranking only changes daily
+const cachedHolderLinks = unstable_cache(
+  (asset: string, holders: string[]) => indexedHolderLinks(asset, holders, HOLDER_LINK_DAYS),
+  ["holder-links", `${HOLDER_LINK_DAYS}d`],
+  { revalidate: 3600 },
+);
+
+// assets whose links timed out, until when not to ask again. A failed read
+// isn't cached, so the busiest assets would run it to the timeout on every visit
+const linksFailed = new Map<string, number>();
+
+/** Which of the given holders moved the asset between each other. Indexer only, null when off or failed. */
+export async function getHolderLinks(identity: AssetIdentity, holders: string[]): Promise<IndexedHolderLink[] | null> {
+  const key = assetKey(identity);
+  if ((linksFailed.get(key) ?? 0) > Date.now()) return null;
+  const links = await indexerRead("holder links", () => cachedHolderLinks(key, holders));
+  if (links === null && (await indexerActive())) linksFailed.set(key, Date.now() + 3_600_000);
+  return links;
+}
+
 export interface TopToken {
   identity: Extract<AssetIdentity, { kind: "issued" }>;
   org: string;
   image: string | null;
-  /** From the order book against XLM, times the XLM price. */
+  /** From our pools, else the order book against XLM; XLM from the XLM / USDC pool. */
   priceUsd: number | null;
   /** Distinct senders over the last 7 days. */
   senders: number;
@@ -189,13 +227,22 @@ async function loadTopTokens(): Promise<TopToken[]> {
     .sort((a, b) => b.senders - a.senders)
     .slice(0, TOP_TOKENS);
 
-  const [tomls, xlm, prices] = await Promise.all([
+  if (!ranked.length) return [];
+
+  const [tomls, book] = await Promise.all([
     Promise.all(ranked.map((a) => fetchTomlOrgInfo(a.homeDomain))),
-    getXlmMarket(),
-    Promise.all(ranked.map((a) => indexedXlmPrice(`${a.code}:${a.issuer}`).catch(() => null))),
+    indexedPricePools().then(buildPriceBook),
   ]);
+  const prices = await Promise.all(
+    ranked.map(async (a) => {
+      const key = `${a.code}:${a.issuer}`;
+      const pooled = book.assets.get(key);
+      if (pooled) return pooled.usd;
+      const mid = await indexedXlmPrice(key).catch(() => null);
+      return mid === null ? null : orderBookPrice(book, mid).usd;
+    }),
+  );
   return ranked.map((a, i) => {
-    const price = prices[i];
     const toml = tomls[i];
     // big issuers don't always serve a toml (circle.com doesn't), the home domain stands in
     return {
@@ -203,7 +250,7 @@ async function loadTopTokens(): Promise<TopToken[]> {
       org: toml?.orgName ?? a.homeDomain,
       image:
         toml?.currencies.find((c) => c.code === a.code && c.issuer === a.issuer)?.image ?? null,
-      priceUsd: price !== null && xlm ? price * xlm.priceUsd : null,
+      priceUsd: prices[i],
       senders: a.senders,
       dailySenders: a.dailySenders,
       holders: a.holders,

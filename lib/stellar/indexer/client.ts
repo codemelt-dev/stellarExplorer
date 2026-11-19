@@ -1,5 +1,6 @@
 import "server-only";
 import { activeNetworkId } from "../network";
+import { limiter } from "./limit";
 
 // two stores behind one login: ClickHouse holds history, the API (PostgREST)
 // holds current state
@@ -19,6 +20,11 @@ export async function indexerActive(): Promise<boolean> {
   return configured && (await activeNetworkId()) === "mainnet";
 }
 
+// the login allows 16 queries at once, shared by every server that uses it
+// (prod, previews, dev). One process takes at most this many, the rest wait
+const inFlight = limiter(6);
+const BUSY_RETRY_MS = 400;
+
 /**
  * Read-only ClickHouse query, rows as objects. Values go in `params` and bind
  * to {name:Type} placeholders. Never build sql from user input.
@@ -33,17 +39,26 @@ export async function chQuery<T>(
   for (const [name, value] of Object.entries(params)) {
     url.searchParams.set(`param_${name}`, String(value));
   }
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: authorization() },
-    body: sql,
-    cache: "no-store",
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) {
-    throw new Error(`ClickHouse ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const send = () =>
+    inFlight(async () => {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: authorization() },
+        body: sql,
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      });
+      return { res, text: await res.text() };
+    });
+  let { res, text } = await send();
+  // other servers on the login took every slot: one more try a moment later
+  if (!res.ok && text.includes("TOO_MANY_SIMULTANEOUS_QUERIES")) {
+    await new Promise((resolve) => setTimeout(resolve, BUSY_RETRY_MS));
+    ({ res, text } = await send());
   }
-  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`ClickHouse ${res.status}: ${text.slice(0, 200)}`);
+  }
   return text
     .split("\n")
     .filter(Boolean)
@@ -70,8 +85,8 @@ export async function apiGet<T>(view: string, query: Record<string, string>): Pr
 
 /**
  * Indexer first, the old source (Horizon or RPC) when it is off, fails, or
- * returns null. Null means "not indexed" (nothing before go-live is), so old
- * data still resolves.
+ * returns null. Null means "not indexed", so data the indexer lacks (testnet,
+ * a ledger not ingested yet) still resolves.
  * `anyNetwork` is for mainnet facts shown on every network (home stats). It
  * skips the network cookie, so those pages can stay static.
  */

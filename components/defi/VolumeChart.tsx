@@ -2,18 +2,27 @@
 
 import { useRef, useState } from "react";
 import { compactNumber, compactUsd } from "@/lib/format";
+import type { TvlBreakdownRow } from "@/lib/stellar/defi";
+import { BreakdownPanel } from "./BreakdownPanel";
 
 const W = 800;
 const H = 150;
 const PAD_Y = 10;
 
-// daily bars, hover tooltip per bar. Formats as money unless told otherwise
+// daily bars, hover tooltip per bar. Formats as money unless told otherwise.
+// With breakdown data the tooltip splits the day, as on the TVL chart
 export function VolumeChart({
   points,
   unit = "usd",
+  breakdown,
+  label = "Daily volume",
 }: {
   points: Array<{ date: number; volume: number }>;
   unit?: "usd" | "count";
+  /** Per day key (unix date / 86400), the rows that make up the bar. */
+  breakdown?: Record<number, TvlBreakdownRow[]>;
+  /** What the chart shows, for screen readers. */
+  label?: string;
 }) {
   const format = unit === "usd" ? compactUsd : compactNumber;
   const [hover, setHover] = useState<number | null>(null);
@@ -44,7 +53,7 @@ export function VolumeChart({
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
         role="img"
-        aria-label={`Daily volume over the last ${points.length} days`}
+        aria-label={`${label} over the last ${points.length} days`}
       >
         {[0.5].map((f) => (
           <line
@@ -76,7 +85,14 @@ export function VolumeChart({
         })}
       </svg>
 
-      {h && (
+      {h && breakdown?.[Math.floor(h.date / 86400)]?.length ? (
+        <BreakdownPanel
+          date={h.date}
+          total={h.volume}
+          rows={breakdown[Math.floor(h.date / 86400)]}
+          at={((hover! + 0.5) / points.length) * 100}
+        />
+      ) : h && (
         <div
           className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 rounded-md border border-border bg-surface-2/95 px-2.5 py-1.5 font-mono text-xs whitespace-nowrap backdrop-blur-sm"
           style={{

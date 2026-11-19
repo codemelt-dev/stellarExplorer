@@ -8,10 +8,10 @@ import { parseDetails, tupleList } from "./transactions";
 
 const MAX_UINT32 = 0xffffffff;
 const MAX_INT64 = "9223372036854775807";
-// transactions read per round, rounds per page. account_activity is ordered
-// by account, so a round is one short index read
-const SCAN_TXS = 500;
-const MAX_ROUNDS = 4;
+// transactions read per round, growing, for at most 2,000 a page. A quiet
+// account's transactions sit years apart, each in its own block of
+// operations, so a page starts small: 50 usually fill it
+const SCAN_TXS = [50, 250, 700, 1000];
 const PATH_PAYMENTS = new Set(["path_payment_strict_send", "path_payment_strict_receive"]);
 
 interface ApiAccount {
@@ -165,7 +165,8 @@ export async function indexedAccountOperations(
   if (newer && at) {
     const below = await chQuery(
       `SELECT 1 FROM account_activity
-       WHERE account = {account:String} AND (ledger_sequence, tx_index) <= ({ledger:UInt32}, {tx:UInt32})
+       WHERE account = {account:String} AND ledger_sequence <= {ledger:UInt32}
+         AND (ledger_sequence, tx_index) <= ({ledger:UInt32}, {tx:UInt32})
        LIMIT 1`,
       { account, ledger: at.ledger, tx: at.txIndex },
     );
@@ -183,17 +184,19 @@ export async function indexedAccountOperations(
   let scannedAny = false;
   const found: ChOpRow[] = [];
 
-  for (let round = 0; round < MAX_ROUNDS && found.length < limit && !scannedAll; round++) {
+  for (let round = 0; round < SCAN_TXS.length && found.length < limit && !scannedAll; round++) {
+    // the plain bound on ledger_sequence and account first in the sort let
+    // ClickHouse read just this stretch, in order, instead of all of it
     const txs = await chQuery<TxKey & { roles: number }>(
-      `SELECT ledger_sequence, tx_index, groupBitOr(roles) AS roles FROM account_activity
+      `SELECT ledger_sequence, tx_index, roles FROM account_activity
        WHERE account = {account:String}
+         AND ledger_sequence ${newer ? ">=" : "<="} {ledger:UInt32}
          AND (ledger_sequence, tx_index) ${newer ? ">=" : "<="} ({ledger:UInt32}, {tx:UInt32})
-       GROUP BY ledger_sequence, tx_index
-       ORDER BY ledger_sequence ${dir}, tx_index ${dir}
+       ORDER BY account ${dir}, ledger_sequence ${dir}, tx_index ${dir}
        LIMIT {scan:UInt32}`,
-      { account, ledger: txBound.ledger, tx: txBound.txIndex, scan: SCAN_TXS },
+      { account, ledger: txBound.ledger, tx: txBound.txIndex, scan: SCAN_TXS[round] },
     );
-    if (txs.length < SCAN_TXS) scannedAll = true;
+    if (txs.length < SCAN_TXS[round]) scannedAll = true;
     if (txs.length === 0) break;
     scannedAny = true;
 

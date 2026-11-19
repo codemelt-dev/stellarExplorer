@@ -119,7 +119,12 @@ export async function DefiSection() {
         </Card>
 
         <Card className="tile gap-3 p-5">
-          <h3 className="text-base font-semibold">Top protocols</h3>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-base font-semibold">Top protocols</h3>
+            <Link href="/defi" className="text-xs text-gold hover:underline underline-offset-4">
+              Compare with our index
+            </Link>
+          </div>
           {protocols.length === 0 ? (
             <EmptyState message="Couldn't reach DefiLlama. Protocol data will be back on the next refresh." />
           ) : (
