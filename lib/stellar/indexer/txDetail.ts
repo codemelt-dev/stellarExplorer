@@ -5,7 +5,7 @@ import type { TxDetail } from "../transactions";
 
 /**
  * A transaction by hash, a fee bump's inner hash too. Null when the indexer
- * doesn't have it (anything before go-live), so the caller can ask Horizon.
+ * doesn't have it, so the caller can ask Horizon.
  */
 export async function indexedTransactionDetail(
   hash: string,
@@ -50,4 +50,22 @@ export async function indexedTransactionDetail(
     ),
   ]);
   return toTxDetail(wanted, tx, ops, events, transfers, passphrase);
+}
+
+/**
+ * Where a transaction sits: its ledger and outer hash, found by its own or a
+ * fee bump's inner hash. Null when the indexer doesn't have it.
+ */
+export async function indexedTxLocation(hash: string): Promise<{ ledger: number; hash: string } | null> {
+  const wanted = hash.toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(wanted)) return null;
+  const [row] = await chQuery<{ ledger_sequence: number; tx_hash: string }>(
+    `SELECT ledger_sequence, lower(hex(hash)) AS tx_hash FROM transactions
+     WHERE (ledger_sequence, tx_index) IN (
+       SELECT ledger_sequence, tx_index FROM tx_by_hash WHERE prefix = unhex({prefix:String}))
+       AND (hash = unhex({hash:String}) OR inner_hash = unhex({hash:String}))
+     LIMIT 1`,
+    { prefix: wanted.slice(0, 16), hash: wanted },
+  );
+  return row ? { ledger: Number(row.ledger_sequence), hash: row.tx_hash } : null;
 }

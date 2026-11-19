@@ -1,3 +1,4 @@
+import { analyticsPublic } from "./analytics-responses";
 import { Address, xdr } from "@stellar/stellar-sdk";
 import {
   ACCOUNT,
@@ -45,6 +46,7 @@ export const upstreamOrigins = [
   "https://api.coingecko.com",
   "https://api.stellar.expert",
   "https://api.llama.fi",
+  "https://registry.npmjs.org",
   "https://clickhouse.indexer.e2e.invalid",
   "https://api.indexer.e2e.invalid",
 ];
@@ -82,6 +84,16 @@ export function responseFor(
   rawBody?: unknown,
   headers: RequestHeaders = {},
 ): FixtureResponse {
+  const analytics = analyticsPublic(url, method, rawBody);
+  if (analytics) return analytics;
+  // Next 16.4's optional upgrade assessment asks npm for advisories during
+  // builds. Model an OFFLINE assessment, not a successful vulnerability scan.
+  if (
+    url.origin === "https://registry.npmjs.org" &&
+    url.pathname === "/-/npm/v1/security/advisories/bulk" &&
+    method === "POST"
+  )
+    return unavailable();
   const indexer = indexerResponseFor(url, method, rawBody, headers);
   if (indexer) return indexer;
   if (

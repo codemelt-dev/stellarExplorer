@@ -6,6 +6,13 @@ export function compactUsd(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
+// money held: cents up to a million, compact above, "<$0.01" for dust
+export function formatUsdValue(n: number): string {
+  if (n > 0 && n < 0.01) return "<$0.01";
+  if (n >= 1e6) return compactUsd(n);
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function compactNumber(n: number): string {
   if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;

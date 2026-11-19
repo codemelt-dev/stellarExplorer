@@ -1,6 +1,9 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { horizonFor } from "./horizon";
 import { getNetwork } from "./config";
+import { withIndexer } from "./indexer/client";
+import { indexedLatestTrades } from "./indexer/trades";
 import { PROTOCOLS, protocolLogo } from "./protocols";
 
 // mainnet DeFi data from public sources, no keys. Everything is
@@ -221,8 +224,17 @@ export interface DexTrade {
   venue: "orderbook" | "pool";
 }
 
+// throws on indexer errors so unstable_cache keeps only good results
+const cachedTrades = unstable_cache(indexedLatestTrades, ["dex-trades"], { revalidate: 60 });
+
 // latest classic DEX fills (orderbook + liquidity pools), always mainnet
-export async function getDexTrades(limit = 25): Promise<DexTrade[] | null> {
+export function getDexTrades(limit = 25): Promise<DexTrade[] | null> {
+  return withIndexer("dex trades", () => cachedTrades(limit), () => horizonDexTrades(limit), {
+    anyNetwork: true,
+  });
+}
+
+async function horizonDexTrades(limit: number): Promise<DexTrade[] | null> {
   try {
     const page = await horizonFor(getNetwork("mainnet").horizonUrl)
       .trades()

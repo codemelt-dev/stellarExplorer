@@ -20,6 +20,11 @@ export const getPriceBook = cache(
     }),
 );
 
+/** The selected network's prices: our pools on mainnet, none on testnet. */
+export async function getActivePriceBook(): Promise<PriceBook | null> {
+  return (await indexerActive()) ? getPriceBook() : null;
+}
+
 /**
  * An asset's price on mainnet: from its deepest pool, else the order book's
  * mid against XLM. Null on testnet or when nothing prices it.

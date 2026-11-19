@@ -154,10 +154,16 @@ export function valueBySide(
 }
 
 /**
- * The value of a concentrated pool, whose sides needn't be worth the same:
- * the trusted side at its price, the other at the pool's own price
- * (`bPerA`, B per A) but never above the trusted side. Both trusted, both
- * at their prices. Null when neither side can be trusted.
+ * Real stable and concentrated pools hold up to about 2.4 times as much of
+ * their unpriced side; a junk pool can't claim more than this.
+ */
+export const UNPRICED_SIDE_CAP = 3;
+
+/**
+ * The value of a stable or concentrated pool, whose sides needn't be worth
+ * the same: the trusted side at its price, the other at the pool's own price
+ * (`bPerA`, B per A) but never above UNPRICED_SIDE_CAP times the trusted side.
+ * Both trusted, both at their prices. Null when neither side can be trusted.
  */
 export function valueByHoldings(
   book: PriceBook,
@@ -175,10 +181,26 @@ export function valueByHoldings(
   else {
     // the other side in units of the trusted one, at the pool's price
     const inSide = aFirst ? other.amount / bPerA : other.amount * bPerA;
-    rest = Number.isFinite(inSide) ? Math.min(inSide * book.assets.get(side.asset)!.xlm, anchor) : 0;
+    rest = Number.isFinite(inSide)
+      ? Math.min(inSide * book.assets.get(side.asset)!.xlm, anchor * UNPRICED_SIDE_CAP)
+      : 0;
   }
   const xlm = anchor + rest;
   return { xlm, usd: book.xlmUsd === null ? null : xlm * book.xlmUsd, by: side.asset };
+}
+
+/**
+ * What an account's `amount` of an asset is worth in USD at its price. An
+ * asset only a shallow pool prices counts for no more than that pool's XLM
+ * side, all that selling it could ever bring, so a junk airdrop can't make an
+ * account look rich. Null when unpriced or XLM has no USD price.
+ */
+export function holdingUsd(book: PriceBook, asset: string, amount: number): number | null {
+  const price = book.assets.get(asset);
+  if (!price || book.xlmUsd === null || !Number.isFinite(amount)) return null;
+  let xlm = amount * price.xlm;
+  if (!trust(book, asset) && price.depthXlm !== null) xlm = Math.min(xlm, price.depthXlm);
+  return xlm * book.xlmUsd;
 }
 
 /** The assets trusted to value pools, with their XLM prices. */

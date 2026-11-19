@@ -5,6 +5,7 @@ import {
   anchorBook,
   buildPriceBook,
   fromAnchorBook,
+  holdingUsd,
   orderBookPrice,
   valueBySide,
   valueByHoldings,
@@ -129,12 +130,13 @@ describe("valueByHoldings", () => {
     ).toMatchObject({ xlm: 1_500, by: "native" });
   });
 
-  it("values the other side at the pool's price, never above the trusted side", () => {
+  it("values the other side at the pool's price, never above three times the trusted side", () => {
     // 1 LGSC = 200 XLM in this pool, so 0.005 LGSC per XLM
     const xlmFirst = (lgsc: number) =>
       valueByHoldings(book, { asset: "native", amount: 1_000 }, { asset: LGSC, amount: lgsc }, 0.005)!.xlm;
     expect(xlmFirst(2)).toBeCloseTo(1_400, 9);
-    expect(xlmFirst(10)).toBe(2_000);
+    expect(xlmFirst(10)).toBeCloseTo(3_000, 9);
+    expect(xlmFirst(50)).toBe(4_000);
     expect(xlmFirst(0)).toBe(1_000);
     const lgscFirst = valueByHoldings(book, { asset: LGSC, amount: 2 }, { asset: "native", amount: 1_000 }, 200)!;
     expect(lgscFirst).toMatchObject({ xlm: 1_400, by: "native" });
@@ -167,5 +169,30 @@ describe("anchorBook", () => {
     expect(valueBySide(again, { asset: AQUA, amount: 3 }, { asset: LGSC, amount: 9 })).toEqual(
       valueBySide(book, { asset: AQUA, amount: 3 }, { asset: LGSC, amount: 9 }),
     );
+  });
+});
+
+describe("holdingUsd", () => {
+  // AQUA from a 2M XLM pool, a junk token from a pool of 1,500 XLM
+  const JUNK = "JUNK:GDZQ5KYWCPWJCSM6GR4BLTNRDC2LBDJZGQWR6BCDYR34J7CPRFOKWXLM";
+  const book = buildPriceBook([
+    XLM_USDC,
+    pool("aqua", "native", 2_000_000, AQUA, 2_000_000_000),
+    pool("junk", "native", 1_500, JUNK, 15_000),
+  ]);
+
+  it("values XLM, USDC and deeply priced assets at their price", () => {
+    expect(holdingUsd(book, "native", 100)).toBeCloseTo(100 * book.xlmUsd!, 9);
+    expect(holdingUsd(book, USDC, 250)).toBeCloseTo(250, 6);
+    expect(holdingUsd(book, AQUA, 1_000)).toBeCloseTo(1 * book.xlmUsd!, 9);
+  });
+
+  it("counts a shallow pool's asset for no more than the pool's XLM side", () => {
+    expect(holdingUsd(book, JUNK, 10)).toBeCloseTo(1 * book.xlmUsd!, 9);
+    expect(holdingUsd(book, JUNK, 83_473_314_000)).toBeCloseTo(1_500 * book.xlmUsd!, 9);
+  });
+
+  it("is null for an asset nothing prices", () => {
+    expect(holdingUsd(book, FAKE_USDC, 5)).toBeNull();
   });
 });

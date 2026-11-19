@@ -4,7 +4,7 @@ import { Horizon, xdr } from "@stellar/stellar-sdk";
 import { horizon } from "./horizon";
 import { activeNetwork } from "./network";
 import { getTransactionMetaXdr } from "./rpc";
-import { getArchivedMetaXdr } from "./archive";
+import { getArchivedMetaXdr, getArchivedTxRaw } from "./archive";
 import { filterTypes, matchesFilter, type HistoryFilter } from "./opFilters";
 import { transactionFlow, type TxFlow } from "./txFlow";
 import {
@@ -26,10 +26,11 @@ import {
   type TokenMovement,
   type TxPreconditions,
 } from "./xdrDecode";
-import { withIndexer } from "./indexer/client";
+import { indexerRead, withIndexer } from "./indexer/client";
 import { indexedRecentTransactions } from "./indexer/transactions";
-import { indexedTransactionDetail } from "./indexer/txDetail";
+import { indexedTransactionDetail, indexedTxLocation } from "./indexer/txDetail";
 import { indexedLatestOperations } from "./indexer/operations";
+import { shared } from "./indexer/shared";
 
 export type TransactionRecord = Horizon.ServerApi.TransactionRecord;
 export type OperationRecord = Horizon.ServerApi.OperationRecord;
@@ -80,18 +81,20 @@ export const getTransactionEffects = cache(
   },
 );
 
+// one indexer read a ledger for every open home page
+const newestOperations = shared(5000, () =>
+  withIndexer("live operations", () => indexedLatestOperations(15), async () => null, {
+    anyNetwork: true,
+  }),
+);
+
 /**
  * The newest mainnet operations for the home page feed, 15 of each kind so
  * every tab has rows. Null when the indexer is off or failing; the browser
  * then streams from Horizon instead.
  */
-export async function getLiveOperations(perKind = 15): Promise<OperationRecord[] | null> {
-  return withIndexer(
-    "live operations",
-    () => indexedLatestOperations(perKind),
-    async () => null,
-    { anyNetwork: true },
-  );
+export async function getLiveOperations(): Promise<OperationRecord[] | null> {
+  return newestOperations();
 }
 
 /** All operations of a transaction (a tx holds at most 100 ops). */
@@ -256,8 +259,18 @@ export const getTransactionDetail = cache(
  * none: Horizon, meta from RPC or the archive. Throws NotFoundError.
  */
 export async function getTransactionRaw(hash: string): Promise<TxRaw> {
-  const [tx, ops] = await Promise.all([getTransaction(hash), getTransactionOperations(hash)]);
-  return rawOf(tx, await resultMeta(tx, ops));
+  try {
+    const [tx, ops] = await Promise.all([getTransaction(hash), getTransactionOperations(hash)]);
+    return rawOf(tx, await resultMeta(tx, ops));
+  } catch (error) {
+    // Horizon keeps about a year, older transactions come out of the ledger
+    // archive, found through the indexer
+    if (!(error instanceof NotFoundError)) throw error;
+    const at = await indexerRead("tx location", () => indexedTxLocation(hash));
+    const raw = at && (await getArchivedTxRaw(at.ledger, at.hash));
+    if (!raw) throw error;
+    return raw;
+  }
 }
 
 export interface TxRow {

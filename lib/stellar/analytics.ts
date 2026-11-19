@@ -8,7 +8,7 @@ import { indexedNetworkDays, indexedSorobanFees } from "./indexer/stats";
 
 // network history from the indexer's daily numbers, mainnet facts on every network
 
-// a quarter of history, once the indexer has it
+// a quarter of history
 const DAYS = 90;
 export const TOP_CONTRACT_DAYS = 7;
 const TOP_CONTRACTS = 10;
@@ -34,10 +34,38 @@ export interface NetworkDay {
   tokenTransfers: number;
 }
 
+// Soroban fees aren't in daily_stats, so they're summed from every transaction,
+// FEE_CHUNK_DAYS at a time. Chunks start on fixed days, so one that has ended
+// keeps its cache key and is read once
+const FEE_CHUNK_DAYS = 10;
+const DAY_MS = 86_400_000;
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+const endedFeeChunk = unstable_cache(indexedSorobanFees, ["soroban-fees"], { revalidate: false });
+
+async function loadSorobanFees(): Promise<Map<string, number>> {
+  const today = Math.floor(Date.now() / DAY_MS);
+  const fees = new Map<string, number>();
+  // one chunk at a time: the backend runs few queries at once
+  for (let start = today - DAYS - ((today - DAYS) % FEE_CHUNK_DAYS); start < today; start += FEE_CHUNK_DAYS) {
+    const end = start + FEE_CHUNK_DAYS;
+    const from = isoDay(start * DAY_MS);
+    try {
+      const rows =
+        end <= today
+          ? await endedFeeChunk(from, isoDay(end * DAY_MS))
+          : await indexedSorobanFees(from, isoDay(today * DAY_MS));
+      for (const r of rows) fees.set(r.day, xlm(r.fees));
+    } catch (error) {
+      // those days chart without the split
+      console.warn(`[indexer] soroban fees ${from}: failed`, error instanceof Error ? error.message : error);
+    }
+  }
+  return fees;
+}
+
 // throws on indexer errors so unstable_cache keeps only good results
 async function loadNetworkDays(): Promise<NetworkDay[]> {
-  const [rows, sorobanFees] = await Promise.all([indexedNetworkDays(DAYS), indexedSorobanFees(DAYS)]);
-  const feesOn = new Map(sorobanFees.map((r) => [r.day, xlm(r.fees)]));
+  const [rows, feesOn] = await Promise.all([indexedNetworkDays(DAYS), loadSorobanFees()]);
   return rows.map((r) => ({
     day: r.day,
     transactions: Number(r.transactions),

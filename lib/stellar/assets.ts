@@ -14,6 +14,7 @@ import {
   indexedAssets,
   indexedHolderLinks,
   indexedListedAssets,
+  indexedToken,
   indexedTokenActivity,
   indexedTopHolders,
   indexedXlmPrice,
@@ -158,21 +159,38 @@ export const getTopHolders = cache(
     indexerRead("top holders", () => indexedTopHolders(assetKey(identity), limit)),
 );
 
+/** Holders and supply of a Soroban-only token, indexer only. Null when off, failed or not indexed. */
+export const getToken = cache((contractId: string) =>
+  indexerRead("token", () => indexedToken(contractId)),
+);
+
 export type { IndexedHolderLink as HolderLink };
 
-/** How far back transfers between top holders count as a link. */
-export const HOLDER_LINK_DAYS = 90;
+/**
+ * How far back transfers between top holders count as a link. With the full
+ * history indexed, 90 days of the top holders' transfers ran past the timeout
+ * on the busiest assets; 30 is about what the index held before the backfill.
+ */
+export const HOLDER_LINK_DAYS = 30;
 
 // a few seconds on the busiest assets, and the ranking only changes daily
 const cachedHolderLinks = unstable_cache(
   (asset: string, holders: string[]) => indexedHolderLinks(asset, holders, HOLDER_LINK_DAYS),
-  ["holder-links"],
+  ["holder-links", `${HOLDER_LINK_DAYS}d`],
   { revalidate: 3600 },
 );
 
+// assets whose links timed out, until when not to ask again. A failed read
+// isn't cached, so the busiest assets would run it to the timeout on every visit
+const linksFailed = new Map<string, number>();
+
 /** Which of the given holders moved the asset between each other. Indexer only, null when off or failed. */
-export function getHolderLinks(identity: AssetIdentity, holders: string[]): Promise<IndexedHolderLink[] | null> {
-  return indexerRead("holder links", () => cachedHolderLinks(assetKey(identity), holders));
+export async function getHolderLinks(identity: AssetIdentity, holders: string[]): Promise<IndexedHolderLink[] | null> {
+  const key = assetKey(identity);
+  if ((linksFailed.get(key) ?? 0) > Date.now()) return null;
+  const links = await indexerRead("holder links", () => cachedHolderLinks(key, holders));
+  if (links === null && (await indexerActive())) linksFailed.set(key, Date.now() + 3_600_000);
+  return links;
 }
 
 export interface TopToken {

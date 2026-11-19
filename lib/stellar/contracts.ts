@@ -249,7 +249,7 @@ export const getTokenInfo = cache(async (contractId: string): Promise<TokenInfo 
   return value;
 });
 
-/** Who deployed it and when. Only the indexer knows, and only since its go-live. */
+/** Who deployed it and when. Only the indexer knows. */
 export const getContractCreation = cache(
   async (contractId: string): Promise<ContractCreation | null> =>
     indexerRead(`contract ${contractId.slice(0, 6)} creation`, () =>

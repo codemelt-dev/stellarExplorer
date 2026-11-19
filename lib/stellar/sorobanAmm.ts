@@ -93,7 +93,7 @@ export function aquariusPool(
     if (!now || !then || now.length !== 2 || then.length !== 2 || amounts?.length !== 3 || k < 0) continue;
     const [amountIn, amountOut, fee] = amounts;
     // too small to tell a whole fee from half of one
-    if (amountIn < 1_000_000n || fee < 100n || amountOut <= 0n) continue;
+    if (fee < 100n || amountOut <= 0n) continue;
     const kept = now[k] - then[k];
     const off = (n: bigint) => (n < 0n ? -n : n);
     const kind =

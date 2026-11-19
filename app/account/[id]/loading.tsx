@@ -14,8 +14,9 @@ export default function AccountLoading() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="gap-4 p-5">
           <Skeleton className="h-5 w-24" />
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-8 w-full" />
+          <Skeleton className="h-7 w-32" />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-full" />
           ))}
         </Card>
         <Card className="gap-4 p-5">

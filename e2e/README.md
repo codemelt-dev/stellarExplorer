@@ -31,6 +31,55 @@ webpack rather than Turbopack. Initial dependency and browser installation
 still require network access when they are not already cached. Font substitution
 is limited to the E2E build; this suite makes no pixel or typography assertions.
 
+## Analytics: pools and holders
+
+Run `bun run test:e2e:analytics-pools-and-holders` separately for the analytics acceptance
+scenarios: classic/Soroswap/Aquarius pools, DeFi comparisons, top-100 holder
+maps, SAC and Soroban token coverage, and failure states. The original suite
+retains its provider-outage corpus. Both run in CI. Do not run them concurrently.
+
+Run commands from the `stellarExplorer` directory. After the suite finishes,
+open its report with `bun run test:e2e:analytics-pools-and-holders:report`.
+
+See [the requirement matrix, adapter scope and live-validation procedure](../docs/analytics-pools-and-holders-testing.md).
+Synthetic browser tests do not prove live reserve, TVL, volume or holder accuracy.
+The separate [live validation report](../docs/live-analytics-validation.md) records those
+checks for representative real pools and USDC. Recheck its saved capture with
+`bun run test:evidence:live-analytics`; this does not make new network requests.
+
+## GitHub Actions
+
+[Explorer and analytics tests](../.github/workflows/playwright.yml) runs on pushes,
+pull requests and manual dispatch. Once the workflow is on the default branch,
+open the repository's **Actions → Explorer and analytics tests → Run workflow**
+to start it manually.
+
+The workflow creates three independent jobs:
+
+- **Unit tests and captured evidence**: lints the test code, runs the unit suite,
+  and rechecks both committed mainnet captures.
+- **Browser tests / explorer**: runs the original explorer scenarios.
+- **Browser tests / analytics-pools-and-holders**: runs the analytics scenarios.
+
+Each browser job builds its own production app and runs desktop and mobile
+Chromium. They use separate runners, so their builds, ports, fixtures and reports
+cannot overwrite each other. A failure in one browser suite does not cancel the
+other. Retried flaky tests still fail CI.
+
+The run summary shows check outcomes and browser pass/fail/flaky/skipped counts.
+Download these artifacts from the workflow run:
+
+- `browser-report-explorer` and `browser-report-analytics-pools-and-holders`:
+  HTML/JSON reports, failure screenshots/videos/traces and the network audit;
+  retained for 14 days.
+- `analytics-validation-evidence`: validation documentation, public mainnet
+  captures, verifier scripts and execution logs; retained for 30 days.
+
+No repository secrets, local `.env`, production indexer or external deployment
+are required. The evidence job revalidates a saved capture; it does not make a
+fresh live-data capture. A green workflow proves these automated checks passed
+for its commit, not formal reviewer acceptance of other chosen pool or asset IDs.
+
 ## Coverage
 
 Every scenario runs in desktop Chromium and Pixel 7 mobile Chromium emulation.
@@ -49,7 +98,7 @@ Every scenario runs in desktop Chromium and Pixel 7 mobile Chromium emulation.
 | Muxed accounts           | IDs zero and uint64 maximum, base-account resolution, filter links preserving muxed address, invalid checksum                                                                   |
 | Missing/unavailable data | Missing transaction/account/contract/ledger with search recovery, Horizon 503 alerts, RPC metadata/events outages                                                               |
 | Empty/loading states     | Account and filtered history, asset results, contract events/storage, SAC interface explanation, transaction operations, delayed transaction skeleton, invalid ledger sequences |
-| Mainnet indexer          | Ledger list/detail, XLM supply and holders, authentication headers, missing-record and outage fallbacks, mainnet as the default, testnet gating and network switching                                   |
+| Mainnet indexer          | Ledger list/detail, XLM supply and holders, authentication headers, missing-record and outage fallbacks, mainnet as the default, testnet gating and network switching           |
 
 ## Fixture boundaries
 
@@ -77,9 +126,9 @@ Every scenario runs in desktop Chromium and Pixel 7 mobile Chromium emulation.
   mainnet explicitly because the indexer fixtures represent mainnet data, and
   one clears the cookie to check that a first visit lands on mainnet. Both are synthetic browser coverage; this suite does not validate
   a live indexer, Horizon or RPC deployment.
-- Indexer coverage uses ClickHouse ledger and asset records plus a PostgREST
-  missing-contract lookup. It does not yet cover indexed contract WASM, events,
-  storage or directory pagination.
+- The original indexer corpus includes ledgers, assets, pools and DeFi totals.
+  analytics adds token metadata/WASM and explicit empty event/storage responses; it
+  does not establish event/storage pagination or live indexer correctness.
 
 When adding a scenario, add a distinct fixture/ID and explicit response branch,
 then assert the user-visible outcome in a spec. Do not stub pages or application

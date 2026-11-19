@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Maximize2, Minimize2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { Amount } from "@/components/stellar/Amount";
-import { stroopsToLumens } from "@/lib/stellar/amount";
+import { unitsToDecimal } from "@/lib/stellar/amount";
 import { compactNumber } from "@/lib/format";
 import {
   bubbleLines,
@@ -31,8 +31,8 @@ const DRAG_PX = 4;
 // label sizes in screen pixels, whatever the zoom
 const LINE_PX: Record<BubbleLine, number> = { rank: 11, share: 12, address: 10, balance: 10 };
 
-function compactBalance(balance: string): string {
-  const n = Number(stroopsToLumens(balance));
+export function compactBalance(balance: string, decimals: number): string {
+  const n = Number(unitsToDecimal(balance, decimals));
   return n >= 1000 ? compactNumber(n) : n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
@@ -46,6 +46,7 @@ export function HolderMapCanvas({
   active,
   onActive,
   code,
+  decimals,
   label,
 }: {
   layout: HolderLayout;
@@ -54,6 +55,7 @@ export function HolderMapCanvas({
   active: string | null;
   onActive: (holder: string | null) => void;
   code: string;
+  decimals: number;
   label: string;
 }) {
   const router = useRouter();
@@ -308,6 +310,7 @@ export function HolderMapCanvas({
                 faded={faded(n.holder)}
                 pxPerUnit={pxPerUnit}
                 code={code}
+                decimals={decimals}
                 onEnter={() => pointers.current.size === 0 && onActive(n.holder)}
                 onLeave={() => onActive(null)}
                 onOpen={() => open(n.holder)}
@@ -321,6 +324,7 @@ export function HolderMapCanvas({
             node={activeNode}
             view={view}
             code={code}
+            decimals={decimals}
             cluster={activeCluster === undefined ? undefined : clusters[activeCluster]}
           />
         )}
@@ -391,6 +395,7 @@ function Bubble({
   faded,
   pxPerUnit,
   code,
+  decimals,
   onEnter,
   onLeave,
   onOpen,
@@ -401,6 +406,7 @@ function Bubble({
   faded: boolean;
   pxPerUnit: number;
   code: string;
+  decimals: number;
   onEnter: () => void;
   onLeave: () => void;
   onOpen: () => void;
@@ -412,7 +418,10 @@ function Bubble({
     rank: `#${node.rank}`,
     share: shareText(node.share),
     address: node.label ?? truncateKey(node.holder, 4),
-    balance: code.length <= 5 ? `${compactBalance(node.balance)} ${code}` : compactBalance(node.balance),
+    balance:
+      code.length <= 5
+        ? `${compactBalance(node.balance, decimals)} ${code}`
+        : compactBalance(node.balance, decimals),
   };
   const heights = lines.map((line) => LINE_PX[line] * 1.3 * unit);
   const top = node.y - heights.reduce((sum, h) => sum + h, 0) / 2;
@@ -462,11 +471,13 @@ function Tooltip({
   node,
   view,
   code,
+  decimals,
   cluster,
 }: {
   node: PlacedHolder;
   view: MapView;
   code: string;
+  decimals: number;
   cluster?: Cluster;
 }) {
   const left = ((node.x - view.x) / view.size) * 100;
@@ -488,11 +499,12 @@ function Tooltip({
         <span className="font-mono">{truncateKey(node.holder, 6)}</span>
         {node.label && <span className="text-dim">{node.label}</span>}
       </span>
-      <Amount amount={stroopsToLumens(node.balance)} assetCode={code} maxDecimals={2} />
-      <span className="text-dim">{shareText(node.share)} of the supply</span>
+      <Amount amount={unitsToDecimal(node.balance, decimals)} assetCode={code} maxDecimals={2} />
+      {node.share !== null && <span className="text-dim">{shareText(node.share)} of the supply</span>}
       {cluster && (
         <span style={{ color: clusterColor(cluster.id) }}>
-          Cluster {cluster.id + 1}: {cluster.members.length} holders, {cluster.share.toFixed(2)}%
+          Cluster {cluster.id + 1}: {cluster.members.length} holders
+          {node.share !== null && `, ${cluster.share.toFixed(2)}%`}
         </span>
       )}
     </div>
