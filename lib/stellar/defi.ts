@@ -32,15 +32,6 @@ export interface TvlPoint {
   tvl: number;
 }
 
-export async function getChainTvlHistory(): Promise<TvlPoint[] | null> {
-  const points = await getJson<TvlPoint[]>(
-    `${LLAMA}/v2/historicalChainTvl/Stellar`,
-    3600,
-  );
-  if (!points || points.length < 2) return null;
-  return points.slice(-90);
-}
-
 export interface ProtocolRow {
   slug: string;
   name: string;
@@ -118,8 +109,8 @@ export async function getProtocolDetail(
     name: meta.name,
     kind: meta.kind,
     logo: protocolLogo(slug, 96),
-    description: data?.description ?? null,
-    website: data?.url ?? null,
+    description: meta.description ?? data?.description ?? null,
+    website: meta.website ?? (data?.url || null),
     currentTvl: tvlHistory[tvlHistory.length - 1]?.tvl ?? null,
     tvlHistory,
   };
@@ -161,52 +152,30 @@ export interface TvlBreakdownRow {
   /** Null for Stellar's own classic pools, drawn with the Stellar mark. */
   logo: string | null;
   tvl: number;
+  /** DefiLlama's figure, for a protocol our index doesn't measure yet. */
+  llama?: boolean;
 }
 
-// chain TVL history + per-day per-protocol breakdown for the rich tooltip.
-// Day key = unix date / 86400. Same protocol fetches the detail pages use,
-// so the Next cache serves them once an hour total
-export async function getChainTvlWithBreakdown(): Promise<{
-  points: TvlPoint[] | null;
-  breakdown: Record<number, TvlBreakdownRow[]>;
-}> {
-  const [points, details] = await Promise.all([
-    getChainTvlHistory(),
-    Promise.all(
-      PROTOCOLS.map((p) =>
-        getJson<{ tvl?: Array<{ date: number; totalLiquidityUSD: number }> }>(
-          `${LLAMA}/protocol/${p.slug}`,
-          3600,
-        ),
+/**
+ * Each protocol's TVL per UTC day from DefiLlama, by slug; day key = unix
+ * date / 86400. Same fetches the detail pages use, so the Next cache serves
+ * them once an hour in total.
+ */
+export async function getProtocolTvlDays(): Promise<Map<string, Map<number, number>>> {
+  const details = await Promise.all(
+    PROTOCOLS.map((p) =>
+      getJson<{ tvl?: Array<{ date: number; totalLiquidityUSD: number }> }>(
+        `${LLAMA}/protocol/${p.slug}`,
+        3600,
       ),
     ),
-  ]);
-
-  const breakdown: Record<number, TvlBreakdownRow[]> = {};
-  if (points) {
-    PROTOCOLS.forEach((p, i) => {
-      const byDay = new Map<number, number>();
-      for (const t of details[i]?.tvl ?? []) {
-        byDay.set(Math.floor(t.date / 86400), t.totalLiquidityUSD);
-      }
-      for (const pt of points) {
-        const key = Math.floor(pt.date / 86400);
-        const tvl = byDay.get(key);
-        if (tvl && tvl > 1000) {
-          (breakdown[key] ??= []).push({
-            slug: p.slug,
-            name: p.name,
-            logo: protocolLogo(p.slug),
-            tvl,
-          });
-        }
-      }
-    });
-    for (const rows of Object.values(breakdown)) {
-      rows.sort((a, b) => b.tvl - a.tvl);
-    }
-  }
-  return { points, breakdown };
+  );
+  return new Map(
+    PROTOCOLS.map((p, i) => [
+      p.slug,
+      new Map((details[i]?.tvl ?? []).map((t) => [Math.floor(t.date / 86400), t.totalLiquidityUSD])),
+    ]),
+  );
 }
 
 export interface DexTrade {
@@ -222,6 +191,8 @@ export interface DexTrade {
   counterIssuer?: string;
   price: number;
   venue: "orderbook" | "pool";
+  /** Null when the fill came from Horizon, which doesn't give it. */
+  txHash: string | null;
 }
 
 // throws on indexer errors so unstable_cache keeps only good results
@@ -261,6 +232,7 @@ async function horizonDexTrades(limit: number): Promise<DexTrade[] | null> {
         counterIssuer: issuer(t.counter_asset_type, t.counter_asset_issuer),
         price: price ? Number(price.n) / Number(price.d) : 0,
         venue: t.trade_type === "liquidity_pool" ? "pool" : "orderbook",
+        txHash: null,
       };
     });
   } catch {

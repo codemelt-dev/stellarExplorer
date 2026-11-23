@@ -29,6 +29,8 @@ import { humanizeOperation, txTypeLabel } from "@/lib/stellar/humanize";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { findLedgerByHash } from "@/lib/stellar/ledgers";
 
 export async function generateMetadata({
   params,
@@ -53,10 +55,13 @@ export default async function TransactionPage({
     tx = await getTransactionDetail(hash);
   } catch (error) {
     if (error instanceof NotFoundError) {
+      // ledger hashes look the same, so search sends them here too
+      const ledger = await findLedgerByHash(hash);
+      if (ledger) redirect(`/ledger/${ledger}`);
       return (
         <EmptyState
           icon={SearchX}
-          message={`No transaction with hash ${truncateKey(hash, 8)} on ${netLabel}. It may be on another network, or the hash may be mistyped.`}
+          message={`No transaction with hash ${truncateKey(hash, 8)} on ${netLabel}, and no recent ledger either. It may be on another network, or the hash may be mistyped.`}
           className="py-24"
         />
       );

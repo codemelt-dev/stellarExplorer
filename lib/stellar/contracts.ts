@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { Address, StrKey, xdr, scValToNative, contract } from "@stellar/stellar-sdk";
 import { Server } from "@stellar/stellar-sdk/rpc";
 import { activeNetwork } from "./network";
@@ -21,6 +22,7 @@ import { indexerActive, indexerRead, withIndexer } from "./indexer/client";
 import { fromAssetKey, type AssetIdentity } from "./assetId";
 import {
   indexedActiveContracts,
+  indexedContractCalls,
   indexedContractCreation,
   indexedContractEvents,
   indexedContracts,
@@ -174,13 +176,21 @@ export interface ContractDirectoryPage {
 
 const DIRECTORY_PAGE = 50;
 
+// a week of calls takes most of a second to count, so the ranking is kept a few minutes
+const cachedActive = unstable_cache(
+  (days: number) => indexedActiveContracts(DIRECTORY_PAGE, days),
+  ["active-contracts"],
+  { revalidate: 300 },
+);
+
 /**
- * Contracts from the indexer: the busiest of the last day, or all of them in
- * address order. Null where there is no indexer (testnet); throws when it fails.
+ * Contracts from the indexer: the busiest of the last `days` days, or all of
+ * them in address order. Null where there is no indexer (testnet); throws when it fails.
  */
 export async function getContractDirectory(
   view: "active" | "all",
   cursor?: string,
+  days = 1,
 ): Promise<ContractDirectoryPage | null> {
   if (!(await indexerActive())) return null;
 
@@ -199,7 +209,7 @@ export async function getContractDirectory(
     };
   }
 
-  const active = (await indexedActiveContracts(DIRECTORY_PAGE)).filter((c) =>
+  const active = (await cachedActive(days)).filter((c) =>
     StrKey.isValidContract(c.contractId),
   );
   // what each one is comes from current state; a miss there just leaves the type blank
@@ -306,6 +316,26 @@ export interface ContractEventItem {
   /** A standard token event (transfer, mint, ...), read as a sentence. */
   token?: TokenEventDescription | null;
 }
+
+/** One call into the contract. */
+export interface ContractCall {
+  /** Null when the transaction wasn't found beside it. */
+  txHash: string | null;
+  ledger: number;
+  createdAt: string;
+  fn: string;
+  /** The account or contract that called it. */
+  caller: string;
+  successful: boolean;
+}
+
+const CALLS = 50;
+
+/** The contract's newest calls, from the indexer only: null on testnet or when it failed. */
+export const getContractCalls = cache(
+  (contractId: string): Promise<ContractCall[] | null> =>
+    indexerRead(`contract ${contractId.slice(0, 6)} calls`, () => indexedContractCalls(contractId, CALLS)),
+);
 
 export interface ContractEventsPage {
   events: ContractEventItem[];

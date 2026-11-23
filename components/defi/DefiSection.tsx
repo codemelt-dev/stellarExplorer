@@ -6,7 +6,8 @@ import { TvlChart } from "./TvlChart";
 import { TokenIcon } from "./TokenIcon";
 import { ProtocolIcon } from "./ProtocolIcon";
 import { Sparkline } from "./Sparkline";
-import { getChainTvlWithBreakdown, getProtocols } from "@/lib/stellar/defi";
+import { StellarMark } from "@/components/stellar/StellarMark";
+import { getTopProtocols, getTvlChart } from "@/lib/stellar/defiOverview";
 import { getTopTokens } from "@/lib/stellar/assets";
 import { assetHref } from "@/lib/stellar/assetId";
 import { compactNumber, compactUsd, formatPrice } from "@/lib/format";
@@ -14,8 +15,8 @@ import { cn } from "@/lib/utils";
 
 export async function DefiSection() {
   const [{ points: history, breakdown }, protocols, tokens] = await Promise.all([
-    getChainTvlWithBreakdown(),
-    getProtocols(),
+    getTvlChart(),
+    getTopProtocols(),
     getTopTokens(),
   ]);
 
@@ -28,9 +29,6 @@ export async function DefiSection() {
         <Badge variant="outline" className="text-dim">
           mainnet
         </Badge>
-        <span className="ml-auto text-xs text-dim">
-          data: DefiLlama · Astrolabe
-        </span>
       </div>
 
       <Card className="tile gap-3 p-5">
@@ -50,7 +48,7 @@ export async function DefiSection() {
         {history ? (
           <TvlChart points={history} breakdown={breakdown} />
         ) : (
-          <EmptyState message="Couldn't reach DefiLlama. TVL data will be back on the next refresh." />
+          <EmptyState message="Couldn't load value locked history. It will be back on the next refresh." />
         )}
       </Card>
 
@@ -122,11 +120,11 @@ export async function DefiSection() {
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h3 className="text-base font-semibold">Top protocols</h3>
             <Link href="/defi" className="text-xs text-gold hover:underline underline-offset-4">
-              Compare with our index
+              See more data
             </Link>
           </div>
           {protocols.length === 0 ? (
-            <EmptyState message="Couldn't reach DefiLlama. Protocol data will be back on the next refresh." />
+            <EmptyState message="Couldn't load protocol figures. They will be back on the next refresh." />
           ) : (
             <div className="flex flex-col">
               <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_6.5rem] items-center gap-x-3 border-b border-border pb-2 text-xs font-medium uppercase tracking-wider text-dim">
@@ -136,14 +134,18 @@ export async function DefiSection() {
               </div>
               {protocols.map((p) => (
                 <div
-                  key={p.name}
+                  key={p.key}
                   className="grid h-[46px] grid-cols-[minmax(0,1fr)_5.5rem_6.5rem] items-center gap-x-3 border-b border-border last:border-b-0"
                 >
                   <Link
-                    href={`/defi/${p.slug}`}
+                    href={p.href}
                     className="group flex min-w-0 items-center gap-2.5 rounded-sm"
                   >
-                    <ProtocolIcon logo={p.logo} name={p.name} />
+                    {p.logo ? (
+                      <ProtocolIcon logo={p.logo} name={p.name} />
+                    ) : (
+                      <StellarMark className="size-5 shrink-0 text-foreground" />
+                    )}
                     <span className="min-w-0">
                       <span className="block truncate text-sm leading-tight group-hover:underline underline-offset-4 decoration-dotted">
                         {p.name}
@@ -154,7 +156,7 @@ export async function DefiSection() {
                     </span>
                   </Link>
                   <span className="text-right font-mono text-sm">
-                    {p.tvl !== null ? compactUsd(p.tvl) : "–"}
+                    {compactUsd(p.tvl)}
                   </span>
                   <span className="text-right font-mono text-sm text-dim">
                     {p.volume24h !== null && p.volume24h > 0

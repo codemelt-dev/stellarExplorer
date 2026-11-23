@@ -26,7 +26,7 @@ function side(key: string): { code: string; issuer?: string } {
 
 // the seller is the offer's owner or the pool, and gave the sold asset; the
 // buyer sent the operation, so it's the one shown as the trader
-export function toDexTrade(t: ChTrade): DexTrade {
+export function toDexTrade(t: ChTrade, txHash: string | null = null): DexTrade {
   const base = side(t.sold_asset);
   const counter = side(t.bought_asset);
   const sold = Number(t.sold_amount);
@@ -46,5 +46,6 @@ export function toDexTrade(t: ChTrade): DexTrade {
     counterIssuer: counter.issuer,
     price: sold > 0 ? Number(t.bought_amount) / sold : 0,
     venue: t.venue === "pool" ? "pool" : "orderbook",
+    txHash,
   };
 }

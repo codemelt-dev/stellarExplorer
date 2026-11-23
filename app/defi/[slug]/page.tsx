@@ -7,8 +7,7 @@ import { EmptyState } from "@/components/states/EmptyState";
 import { ProtocolIcon } from "@/components/defi/ProtocolIcon";
 import { ProtocolCharts } from "@/components/defi/ProtocolCharts";
 import { DexTrades } from "@/components/defi/DexTrades";
-import { PagedList } from "@/components/layout/PagedList";
-import { PoolActivityRow } from "@/components/pool/PoolActivityRow";
+import { PoolActivityTable } from "@/components/defi/PoolActivityTable";
 import { DefiMenu } from "@/components/layout/DefiMenu";
 import { StatTile } from "@/components/stats/StatTile";
 import {
@@ -107,7 +106,7 @@ export default async function ProtocolPage({
           align="end"
           label={
             <>
-              <span className="text-dim">Protocols ({PROTOCOLS.length}):</span> {detail.name}
+              <span className="text-dim">Protocols ({PROTOCOLS.length + 1}):</span> {detail.name}
             </>
           }
           triggerClassName="rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-surface-2"
@@ -321,12 +320,8 @@ export default async function ProtocolPage({
         ) : onchain.activity.length === 0 ? (
           <EmptyState message={`No swaps, deposits or withdrawals in the ${detail.name} pools we track over the last 3 days.`} />
         ) : (
-          <div className="px-5 pb-4">
-            <PagedList topId="activity" className="flex flex-col">
-              {onchain.activity.map((a, i) => (
-                <PoolActivityRow key={`${a.txHash}-${a.pool.id}-${i}`} activity={a} pool={a.pool} />
-              ))}
-            </PagedList>
+          <div className="flex flex-col gap-3 px-5 pb-4">
+            <PoolActivityTable activity={onchain.activity} topId="activity" />
           </div>
         )}
       </Card>

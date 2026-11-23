@@ -9,7 +9,7 @@ import { CopyButton } from "@/components/stellar/CopyButton";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
 import { PagedList } from "@/components/layout/PagedList";
-import { getLedger, getLedgerTransactions } from "@/lib/stellar/ledgers";
+import { getLatestLedgerSequence, getLedger, getLedgerTransactions } from "@/lib/stellar/ledgers";
 import { NotFoundError } from "@/lib/stellar/transactions";
 import { stroopsToLumens } from "@/lib/stellar/amount";
 import { truncateKey } from "@/lib/stellar/strkey";
@@ -51,10 +51,29 @@ export default async function LedgerPage({
     ]);
   } catch (error) {
     if (error instanceof NotFoundError) {
+      if (seq === 1) {
+        return (
+          <EmptyState
+            icon={SearchX}
+            message="Ledger 1 is the genesis ledger: the network's starting state, set before any transaction ran. No history source serves it, so history starts at ledger 2."
+            action={
+              <Link href="/ledger/2" className="text-sm text-gold hover:underline underline-offset-4">
+                Go to ledger 2
+              </Link>
+            }
+            className="py-24"
+          />
+        );
+      }
+      const latest = await getLatestLedgerSequence();
       return (
         <EmptyState
           icon={SearchX}
-          message={`Ledger ${seq} doesn't exist on ${netLabel} yet. The network may not have reached it yet.`}
+          message={
+            latest && seq < latest
+              ? `Ledger ${seq} is older than the history we can read on ${netLabel}.`
+              : `Ledger ${seq} doesn't exist on ${netLabel} yet.`
+          }
           className="py-24"
         />
       );

@@ -60,7 +60,8 @@ export default async function LiquidityPoolsPage({
         <p className="max-w-3xl text-sm text-dim">
           Stellar&apos;s built-in AMM pools and the Soroban pools of Soroswap and Aquarius, ranked
           by value locked. A pool is valued by its XLM, USDC or deeply priced side, at prices from
-          our own pools, so a junk token can&apos;t inflate it. Live, refreshed every two minutes.
+          our own pools, so a junk token can&apos;t inflate it. We list the 500 most valuable built-in
+          pools and every Soroban pool we can value. Live, refreshed every two minutes.
         </p>
       </div>
 
@@ -72,7 +73,7 @@ export default async function LiquidityPoolsPage({
             message={
               view === "all"
                 ? "No pools could be valued right now."
-                : `No ${PROTOCOL_LABEL[view]} pools in the top ${all!.length} right now.`
+                : `No ${PROTOCOL_LABEL[view]} pools could be valued right now.`
             }
           />
         ) : (

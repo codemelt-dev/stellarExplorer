@@ -52,7 +52,7 @@ export function StatTile({
           {value}
         </span>
         {caption && (
-          <span className="truncate text-xs text-dim tabular-nums">{caption}</span>
+          <span className="text-xs text-pretty text-dim tabular-nums">{caption}</span>
         )}
       </div>
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-2 text-dim">

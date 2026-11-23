@@ -8,6 +8,7 @@ import { shared } from "./indexer/shared";
 import { parseCursor } from "./indexer/cursor";
 import {
   indexedLedger,
+  indexedLedgerByHash,
   indexedLedgers,
   indexedLedgerTransactions,
   indexedLiveLedgers,
@@ -77,6 +78,21 @@ export const getLedger = cache(async (sequence: number): Promise<LedgerRow> =>
     },
   ),
 );
+
+/** Sequence of the ledger with this hash, searched among recent ledgers only. */
+export async function findLedgerByHash(hash: string): Promise<number | null> {
+  if (!/^[0-9a-f]{64}$/i.test(hash)) return null;
+  return withIndexer("ledger by hash", () => indexedLedgerByHash(hash.toLowerCase()), async () => null);
+}
+
+/** Newest closed ledger, to tell a future ledger from one older than our history. */
+export async function getLatestLedgerSequence(): Promise<number | null> {
+  return withIndexer(
+    "latest ledger",
+    async () => (await indexedLedgers(null, 1))?.[0]?.sequence ?? null,
+    async () => null,
+  );
+}
 
 export const getLedgerTransactions = cache(
   async (sequence: number): Promise<LedgerTx[]> =>

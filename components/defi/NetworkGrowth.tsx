@@ -17,12 +17,9 @@ export async function NetworkGrowth() {
           mainnet
         </Badge>
         {growth && (
-          <span className="ml-auto text-xs text-dim">
-            data: {growth.source === "indexer" ? "Astrolabe" : "stellar.expert"} ·{" "}
-            <Link href="/analytics" className="text-gold hover:underline underline-offset-4">
-              More in Analytics
-            </Link>
-          </span>
+          <Link href="/analytics" className="ml-auto text-xs text-gold hover:underline underline-offset-4">
+            See more data
+          </Link>
         )}
       </div>
 

@@ -65,7 +65,7 @@ export default async function SearchPage({
       ) : q ? (
         <EmptyState
           icon={SearchX}
-          message={`Nothing matches "${q}". Try a full address (G…/C…/M…), a 64-character transaction hash, a ledger number, an asset code, or name*domain.com.`}
+          message={`Nothing matches "${q}". Try a full address (G…/C…/M…), a transaction or ledger hash, a ledger number, an asset code, or name*domain.com.`}
           className="py-16"
         />
       ) : (

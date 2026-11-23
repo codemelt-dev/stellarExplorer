@@ -46,6 +46,7 @@ export function BreakdownPanel({
                 <StellarMark className="size-2.5 shrink-0" />
               )}
               <span className="truncate">{row.name}</span>
+              {row.llama && <span className="shrink-0 text-dim">DefiLlama</span>}
             </span>
             <span className="shrink-0 font-mono">
               {compactUsd(row.tvl)}

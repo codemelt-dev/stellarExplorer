@@ -27,7 +27,6 @@ export default async function AnalyticsPage() {
           <Badge variant="outline" className="text-dim">
             mainnet
           </Badge>
-          <span className="ml-auto text-xs text-dim">data: Astrolabe</span>
         </div>
         <p className="max-w-3xl text-sm text-dim">
           The network day by day, from our own index: transactions, operations, accounts, fees and

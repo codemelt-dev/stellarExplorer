@@ -10,6 +10,7 @@ import { Identicon } from "@/components/stellar/Identicon";
 import { CopyButton } from "@/components/stellar/CopyButton";
 import { ScValView } from "@/components/stellar/ScValView";
 import { EventList } from "@/components/contract/EventList";
+import { CallList } from "@/components/contract/CallList";
 import { Time } from "@/components/stellar/Time";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
@@ -17,6 +18,7 @@ import { PagedList } from "@/components/layout/PagedList";
 import { HolderSections } from "@/components/asset/HolderSections";
 import { activeNetwork } from "@/lib/stellar/network";
 import {
+  getContractCalls,
   getContractCreation,
   getContractEvents,
   getContractInterface,
@@ -54,12 +56,13 @@ export default async function ContractPage({
   const network = await activeNetwork();
   const netLabel = network.label.toLowerCase();
 
-  let summary, iface, events, creation, storage, token;
+  let summary, iface, events, calls, creation, storage, token;
   try {
-    [summary, iface, events, creation, storage, token] = await Promise.all([
+    [summary, iface, events, calls, creation, storage, token] = await Promise.all([
       getContractSummary(id),
       getContractInterface(id),
       getContractEvents(id),
+      getContractCalls(id),
       getContractCreation(id),
       getContractStorage(id, after),
       // a Soroban-only token the indexer counts from its transfers, mainnet only
@@ -280,9 +283,11 @@ export default async function ContractPage({
         </>
       )}
 
-      {/* paging through storage reloads the page, stay on that tab */}
-      <Tabs defaultValue={after ? "storage" : "events"}>
+      {/* paging through storage reloads the page, stay on that tab; otherwise
+          open on calls, and on events only when there are no calls to show */}
+      <Tabs defaultValue={after ? "storage" : calls?.length ? "calls" : "events"}>
         <TabsList>
+          <TabsTrigger value="calls">Recent calls</TabsTrigger>
           <TabsTrigger value="events">Recent events</TabsTrigger>
           <TabsTrigger value="interface">Interface</TabsTrigger>
           <TabsTrigger value="storage">Storage</TabsTrigger>
@@ -296,6 +301,18 @@ export default async function ContractPage({
               <EmptyState message="No events from this contract. Many contracts emit none of their own: their activity shows up as calls, and as events of the tokens they move." />
             ) : (
               <EventList contractId={id} first={events} ownToken={ownToken} />
+            )}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="calls" className="mt-4">
+          <Card id="calls" className="scroll-mt-24 gap-3 p-5">
+            {calls === null ? (
+              <EmptyState message="Couldn't load calls. They come from our indexer, which covers mainnet only." />
+            ) : calls.length === 0 ? (
+              <EmptyState message="No calls to this contract in our index." />
+            ) : (
+              <CallList calls={calls} />
             )}
           </Card>
         </TabsContent>
