@@ -156,7 +156,7 @@ export default async function DefiPage() {
             label="Value locked"
             info="Both sides of every pool we can value, plus what open offers sell on the order book, at prices from our own pools."
             value={usd(sum((t) => t.tvlUsd) + (orderBook?.tvlUsd ?? 0))}
-            caption={`${sum((t) => t.pools).toLocaleString("en-US")}${totals.some((t) => t.protocol === "classic" && t.pools >= CLASSIC_POOLS) ? "+" : ""} pools${orderBook ? " and the order book" : ""}`}
+            caption={`${sum((t) => t.pools).toLocaleString("en-US")}${totals.some((t) => t.protocol === "classic" && t.pools >= CLASSIC_POOLS) ? "+" : ""} pools${orderBook?.tvlUsd ? " and the order book" : ""}`}
             icon={Droplets}
           />
           <StatTile
