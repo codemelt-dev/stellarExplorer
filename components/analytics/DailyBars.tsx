@@ -113,9 +113,14 @@ export function DailyBars({
         </svg>
 
         {hover !== null && (
+          // pinned to the bar but slid by the same share of its own width, so
+          // it never leaves the card and never squeezes its text at the edges
           <div
-            className="pointer-events-none absolute -top-1 z-10 min-w-36 -translate-x-1/2 rounded-md border border-border bg-surface-2/95 px-2.5 py-1.5 text-xs backdrop-blur-sm"
-            style={{ left: `${Math.min(85, Math.max(15, ((hover + 0.5) / days.length) * 100))}%` }}
+            className="pointer-events-none absolute -top-1 z-10 min-w-36 rounded-md border border-border bg-surface-2/95 px-2.5 py-1.5 text-xs whitespace-nowrap backdrop-blur-sm"
+            style={{
+              left: `${((hover + 0.5) / days.length) * 100}%`,
+              transform: `translateX(-${((hover + 0.5) / days.length) * 100}%)`,
+            }}
           >
             <div className="font-mono text-dim">{dayLabel(days[hover])}</div>
             {values[hover].every((v) => v === null) ? (

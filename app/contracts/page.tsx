@@ -17,6 +17,7 @@ import { ClickableRow } from "@/components/stellar/ClickableRow";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
 import { Pager } from "@/components/layout/Pager";
+import { SegmentedLinks } from "@/components/layout/SegmentedLinks";
 import { TypeTabs, type TypeTab } from "@/components/layout/TypeTabs";
 import { listHeadClass } from "@/components/layout/listTable";
 import { getContractDirectory } from "@/lib/stellar/contracts";
@@ -27,6 +28,12 @@ export const metadata: Metadata = { title: "Contracts · Stellar Explorer" };
 
 type View = "active" | "all";
 
+// how far back the most active ranking counts
+const PERIODS = [
+  { id: "24h", label: "24h", days: 1, href: "/contracts", words: "24 hours" },
+  { id: "7d", label: "7d", days: 7, href: "/contracts?period=7d", words: "7 days" },
+];
+
 const TABS: TypeTab<View>[] = [
   { id: "active", label: "Most active", icon: Activity },
   { id: "all", label: "All contracts", icon: List },
@@ -35,17 +42,18 @@ const TABS: TypeTab<View>[] = [
 export default async function ContractsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; cursor?: string }>;
+  searchParams: Promise<{ type?: string; cursor?: string; period?: string }>;
 }) {
-  const { type, cursor } = await searchParams;
+  const { type, cursor, period: periodParam } = await searchParams;
   const view: View = type === "all" ? "all" : "active";
+  const period = PERIODS.find((p) => p.id === periodParam) ?? PERIODS[0];
   const network = await activeNetwork();
   const netLabel = network.label.toLowerCase();
 
   let page;
   let failed = false;
   try {
-    page = await getContractDirectory(view, cursor);
+    page = await getContractDirectory(view, cursor, period.days);
   } catch {
     failed = true;
   }
@@ -66,12 +74,15 @@ export default async function ContractsPage({
         <h1 className="text-xl font-semibold tracking-tight">Contracts</h1>
         <p className="text-sm text-dim">
           {view === "active"
-            ? `The contracts called most on ${netLabel} over the last 24 hours.`
+            ? `The contracts called most on ${netLabel} over the last ${period.words}.`
             : `Every contract on ${netLabel}, in address order.`}
         </p>
       </div>
 
-      <TypeTabs tabs={TABS} active={view} basePath="/contracts" label="Contract list" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <TypeTabs tabs={TABS} active={view} basePath="/contracts" label="Contract list" />
+        {view === "active" && <SegmentedLinks label="Period" options={PERIODS} value={period.id} />}
+      </div>
 
       <Card className="gap-0 p-0">
         {failed || !page ? (
@@ -86,7 +97,7 @@ export default async function ContractsPage({
           <EmptyState
             message={
               view === "active"
-                ? "No contract calls in the last 24 hours."
+                ? `No contract calls in the last ${period.words}.`
                 : "No contracts on this page. Go back to the start of the list."
             }
           />
@@ -95,9 +106,9 @@ export default async function ContractsPage({
             <TableHeader className={listHeadClass}>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-4">Contract</TableHead>
-                <TableHead>What it is</TableHead>
+                <TableHead>Type</TableHead>
                 {view === "active" && (
-                  <TableHead className="pr-4 text-right">Calls, 24h</TableHead>
+                  <TableHead className="pr-4 text-right">Calls, {period.label}</TableHead>
                 )}
               </TableRow>
             </TableHeader>

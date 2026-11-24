@@ -8,18 +8,25 @@ export interface TypeTab<T extends string> {
   icon: LucideIcon;
 }
 
-// segmented tabs driven by a ?type= param, so every tab is a shareable URL
+// segmented tabs driven by a ?type= param, so every tab is a shareable URL.
+// `keep` carries other params (a sort, say) over to every tab
 export function TypeTabs<T extends string>({
   tabs,
   active,
   basePath,
   label,
+  keep = {},
 }: {
   tabs: TypeTab<T>[];
   active: T;
   basePath: string;
   label: string;
+  keep?: Record<string, string>;
 }) {
+  const hrefOf = (type: T | null) => {
+    const qs = new URLSearchParams({ ...(type ? { type } : {}), ...keep }).toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+  };
   return (
     <nav
       aria-label={label}
@@ -30,7 +37,7 @@ export function TypeTabs<T extends string>({
         return (
           <Link
             key={id}
-            href={i === 0 ? basePath : `${basePath}?type=${id}`}
+            href={hrefOf(i === 0 ? null : id)}
             aria-current={current ? "page" : undefined}
             className={cn(
               "inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm transition-colors duration-150 sm:flex-none",

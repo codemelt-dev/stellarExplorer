@@ -11,6 +11,7 @@ import {
   type ContractSummary,
 } from "../contractDecode";
 import type {
+  ContractCall,
   ContractCreation,
   ContractEventsPage,
   ContractStorageEntry,
@@ -220,6 +221,49 @@ export async function indexedContractEvents(
   };
 }
 
+interface ChCall {
+  ledger_sequence: number;
+  closed_ts: number;
+  function: string;
+  caller: string;
+  successful: boolean | number;
+  tx_hash: string;
+}
+
+/**
+ * A contract's newest calls with their transactions' hashes. The table is
+ * sorted by contract, then position, so the newest rows read first.
+ */
+export async function indexedContractCalls(contractId: string, limit: number): Promise<ContractCall[]> {
+  const rows = await chQuery<ChCall>(
+    `WITH page AS (
+       SELECT ledger_sequence, tx_index, op_index, toUnixTimestamp(closed_at) AS closed_ts,
+              function, caller, successful
+       FROM contract_calls
+       WHERE contract_id = {contract:String}
+       ORDER BY contract_id DESC, ledger_sequence DESC, tx_index DESC, op_index DESC
+       LIMIT {limit:UInt32})
+     SELECT p.ledger_sequence AS ledger_sequence, p.closed_ts AS closed_ts, p.function AS function,
+            p.caller AS caller, p.successful AS successful, lower(hex(t.hash)) AS tx_hash
+     FROM page AS p
+     LEFT JOIN (SELECT ledger_sequence, tx_index, hash FROM transactions
+                WHERE ledger_sequence >= (SELECT ifNull(minOrNull(ledger_sequence), {max:UInt32}) FROM page)
+                  AND (ledger_sequence, tx_index) IN (SELECT ledger_sequence, tx_index FROM page)) AS t
+            USING (ledger_sequence, tx_index)
+     ORDER BY p.ledger_sequence DESC, p.tx_index DESC, p.op_index DESC`,
+    { contract: contractId, limit, max: MAX_UINT32 },
+  );
+  return rows.map((c) => ({
+    // a LEFT JOIN miss comes back as zeros, not null
+    txHash: /^[0-9a-f]{64}$/.test(c.tx_hash) && !/^0+$/.test(c.tx_hash) ? c.tx_hash : null,
+    ledger: Number(c.ledger_sequence),
+    createdAt: new Date(Number(c.closed_ts) * 1000).toISOString(),
+    fn: c.function,
+    caller: c.caller,
+    successful: Boolean(Number(c.successful)),
+  }));
+}
+
 export interface IndexedContract {
   contract_id: string;
   wasm_hash: string | null;
@@ -250,15 +294,16 @@ export async function indexedContractsById(ids: string[]): Promise<IndexedContra
   });
 }
 
-/** Contracts with the most calls over the last day. */
+/** Contracts with the most calls over the last `days` days. Past a week the read gets slow. */
 export async function indexedActiveContracts(
   limit: number,
+  days = 1,
 ): Promise<Array<{ contractId: string; calls: number }>> {
   const rows = await chQuery<{ contract_id: string; calls: string | number }>(
     `SELECT contract_id, count() AS calls FROM contract_calls
-     WHERE closed_at >= now() - INTERVAL 1 DAY
+     WHERE closed_at >= now() - INTERVAL {days:UInt32} DAY
      GROUP BY contract_id ORDER BY calls DESC LIMIT {limit:UInt32}`,
-    { limit },
+    { limit, days },
   );
   return rows.map((r) => ({ contractId: r.contract_id, calls: Number(r.calls) }));
 }

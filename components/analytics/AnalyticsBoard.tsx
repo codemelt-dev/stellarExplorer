@@ -45,6 +45,10 @@ export function AnalyticsBoard({ days }: { days: NetworkDay[] }) {
   const keys = shown.map((d) => d.day);
   const series = (...pick: Array<(d: NetworkDay) => number | null>) =>
     shown.map(({ data }) => pick.map((p) => (data ? p(data) : null)));
+  // the corner figure follows the range: a total, or a daily average where days can't add up
+  const inRange = shown.flatMap(({ data }) => (data ? [data] : []));
+  const sum = (value: (d: NetworkDay) => number) => inRange.reduce((s, d) => s + value(d), 0);
+  const totalOf = (value: (d: NetworkDay) => number) => ({ value: sum(value), label: "total" });
 
   const latest = days[days.length - 1];
   const before = days.slice(-8, -1);
@@ -53,9 +57,17 @@ export function AnalyticsBoard({ days }: { days: NetworkDay[] }) {
     return before.length && average > 0 ? `${percentGap(value(latest), average)} vs 7-day average` : undefined;
   };
 
-  const charts: Array<{ title: string; info: string; series: BarSeries[]; values: Array<Array<number | null>>; format: (n: number) => string }> = [
+  const charts: Array<{
+    title: string;
+    info: string;
+    series: BarSeries[];
+    values: Array<Array<number | null>>;
+    format: (n: number) => string;
+    summary: { value: number; label: string };
+  }> = [
     {
       title: "Transactions",
+      summary: totalOf((d) => d.transactions),
       info: "Every transaction in a ledger, failed ones included. Soroban ones call a contract.",
       series: [CLASSIC, SOROBAN],
       values: series((d) => d.transactions - d.soroban, (d) => d.soroban),
@@ -63,6 +75,7 @@ export function AnalyticsBoard({ days }: { days: NetworkDay[] }) {
     },
     {
       title: "Failed transactions",
+      summary: { value: sum((d) => d.transactions) ? (sum((d) => d.failed) / sum((d) => d.transactions)) * 100 : 0, label: "of all" },
       info: "The share of transactions that failed but still paid their fee.",
       series: [{ label: "Failed", color: RED }],
       values: series((d) => (d.transactions ? (d.failed / d.transactions) * 100 : 0)),
@@ -70,6 +83,7 @@ export function AnalyticsBoard({ days }: { days: NetworkDay[] }) {
     },
     {
       title: "Operations",
+      summary: totalOf((d) => d.operations),
       info: "Operations in every transaction, failed ones included.",
       series: [{ label: "Operations", color: GOLD }],
       values: series((d) => d.operations),
@@ -77,6 +91,7 @@ export function AnalyticsBoard({ days }: { days: NetworkDay[] }) {
     },
     {
       title: "Active accounts",
+      summary: { value: inRange.length ? sum((d) => d.activeAccounts) / inRange.length : 0, label: "a day on average" },
       info: "Distinct accounts that sent a transaction that day.",
       series: [{ label: "Active accounts", color: GOLD }],
       values: series((d) => d.activeAccounts),
@@ -84,6 +99,7 @@ export function AnalyticsBoard({ days }: { days: NetworkDay[] }) {
     },
     {
       title: "New accounts",
+      summary: totalOf((d) => d.newAccounts),
       info: "Accounts created that day, by successful create account operations.",
       series: [{ label: "New accounts", color: GOLD }],
       values: series((d) => d.newAccounts),
@@ -91,6 +107,7 @@ export function AnalyticsBoard({ days }: { days: NetworkDay[] }) {
     },
     {
       title: "Fees",
+      summary: totalOf((d) => d.fees),
       info: "What transactions paid in fees, in XLM. Soroban fees include the resources a contract call used.",
       series: [CLASSIC, SOROBAN],
       values: series(
@@ -101,6 +118,7 @@ export function AnalyticsBoard({ days }: { days: NetworkDay[] }) {
     },
     {
       title: "Contract calls",
+      summary: totalOf((d) => d.contractCalls),
       info: "Soroban contract invocations.",
       series: [{ label: "Contract calls", color: VIOLET }],
       values: series((d) => d.contractCalls),
@@ -108,6 +126,7 @@ export function AnalyticsBoard({ days }: { days: NetworkDay[] }) {
     },
     {
       title: "New contracts",
+      summary: totalOf((d) => d.newContracts),
       info: "Contracts deployed that day, Stellar asset contracts included.",
       series: [{ label: "New contracts", color: VIOLET }],
       values: series((d) => d.newContracts),
@@ -115,6 +134,7 @@ export function AnalyticsBoard({ days }: { days: NetworkDay[] }) {
     },
     {
       title: "Token transfers",
+      summary: totalOf((d) => d.tokenTransfers),
       info: "Payments, trades and contract transfers of any asset, as unified token events. Fees left out.",
       series: [{ label: "Token transfers", color: GOLD }],
       values: series((d) => d.tokenTransfers),
@@ -171,17 +191,21 @@ export function AnalyticsBoard({ days }: { days: NetworkDay[] }) {
           </div>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          {charts.map((c) => {
-            const last = c.values[c.values.length - 1];
+          {charts.map((c, i) => {
+            // an odd last chart takes the whole row instead of leaving a hole beside it
+            const alone = i === charts.length - 1 && charts.length % 2 === 1;
             return (
-              <Card key={c.title} className="tile gap-3 p-5">
+              <Card key={c.title} className={`tile gap-3 p-5 ${alone ? "lg:col-span-2" : ""}`}>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h3 className="text-base font-semibold">
                     {c.title}
                   </h3>
-                  {last.some((v) => v !== null) && (
+                  {inRange.length > 0 && (
                     <span className="font-mono text-sm text-dim">
-                      {c.format(last.reduce<number>((s, v) => s + (v ?? 0), 0))}
+                      {c.format(c.summary.value)}{" "}
+                      <span className="font-sans text-xs">
+                        {c.summary.label} ({range}d)
+                      </span>
                     </span>
                   )}
                 </div>
@@ -190,14 +214,17 @@ export function AnalyticsBoard({ days }: { days: NetworkDay[] }) {
               </Card>
             );
           })}
-          <Card className="tile gap-3 p-5">
+          <Card className="tile gap-3 p-5 lg:col-span-2">
             <h3 className="text-base font-semibold">Operations by type</h3>
-            <ul className="flex flex-col gap-1.5">
+            <ul className="gap-x-10 sm:columns-2">
               {[...topTypes, ...(rest ? ([[`${types.length - 12} other types`, rest]] as Array<[string, number]>) : [])].map(
                 ([type, n]) => {
                   const contract = CONTRACT_TYPES.has(type);
                   return (
-                    <li key={type} className="grid grid-cols-[minmax(0,1fr)_4.5rem_3.5rem] items-center gap-x-3 text-sm">
+                    <li
+                      key={type}
+                      className="mb-1.5 grid break-inside-avoid grid-cols-[minmax(0,1fr)_4.5rem_3.5rem] items-center gap-x-3 text-sm"
+                    >
                       <span className="flex min-w-0 flex-col gap-1">
                         <span className="truncate">{byType.has(type) ? typeName(type) : type}</span>
                         <span className="h-1 rounded-full bg-surface-2" aria-hidden="true">

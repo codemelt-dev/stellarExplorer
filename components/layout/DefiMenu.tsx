@@ -11,9 +11,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePointerMenu } from "./usePointerMenu";
 import { ProtocolIcon } from "@/components/defi/ProtocolIcon";
-import { PROTOCOLS, protocolLogo } from "@/lib/stellar/protocols";
+import { StellarMark } from "@/components/stellar/StellarMark";
+import { CLASSIC_AMM, PROTOCOLS, protocolLogo } from "@/lib/stellar/protocols";
 
-// protocol grid under the DeFi nav item, each opens its protocol page
+// protocol grid under the DeFi nav item, each opens its protocol page;
+// the classic pools sit beside the order book, both built into Stellar
 export function DefiMenu({
   triggerClassName,
   label = "DeFi",
@@ -34,17 +36,32 @@ export function DefiMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent {...menu.content} align={align} sideOffset={8} className="w-[min(26rem,calc(100vw-2rem))] p-2">
         <div className="grid grid-cols-2 gap-1">
-          {PROTOCOLS.map((p) => (
-            <DropdownMenuItem key={p.slug} asChild className="gap-2.5 px-2.5 py-2">
-              <Link href={`/defi/${p.slug}`}>
-                <ProtocolIcon logo={protocolLogo(p.slug)} name={p.name} />
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm">{p.name}</span>
-                  <span className="truncate text-xs text-dim">{p.kind}</span>
-                </span>
-              </Link>
-            </DropdownMenuItem>
-          ))}
+          {PROTOCOLS.flatMap((p) => {
+            const item = (
+              <DropdownMenuItem key={p.slug} asChild className="gap-2.5 px-2.5 py-2">
+                <Link href={`/defi/${p.slug}`}>
+                  <ProtocolIcon logo={protocolLogo(p.slug)} name={p.name} />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm">{p.name}</span>
+                    <span className="truncate text-xs text-dim">{p.kind}</span>
+                  </span>
+                </Link>
+              </DropdownMenuItem>
+            );
+            if (p.slug !== "stellar-dex") return [item];
+            return [
+              item,
+              <DropdownMenuItem key="classic" asChild className="gap-2.5 px-2.5 py-2">
+                <Link href={CLASSIC_AMM.href}>
+                  <StellarMark className="size-5 shrink-0 text-foreground" />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm">{CLASSIC_AMM.name}</span>
+                    <span className="truncate text-xs text-dim">{CLASSIC_AMM.kind}</span>
+                  </span>
+                </Link>
+              </DropdownMenuItem>,
+            ];
+          })}
         </div>
         <DropdownMenuSeparator className="my-2" />
         <DropdownMenuItem asChild className="gap-2 px-2.5 py-2 text-sm text-dim">

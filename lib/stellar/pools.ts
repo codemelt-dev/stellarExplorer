@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
+import { freshCache } from "../cache";
 import { StrKey } from "@stellar/stellar-sdk";
 import { stroopsToLumens } from "./amount";
 import { fromAssetKey, type AssetIdentity } from "./assetId";
@@ -58,9 +59,8 @@ import {
 } from "./sorobanAmm";
 
 const LEDGERS_PER_DAY = 17_280;
-const TOP_POOLS = 100;
 // classic pools counted in the protocol totals: the top 500 hold about 99% of the value
-const CLASSIC_POOLS = 500;
+export const CLASSIC_POOLS = 500;
 const ACTIVITY = 50;
 const DAYS = 30;
 // contracts to check for Soroban pools, by what they hold
@@ -434,7 +434,7 @@ async function loadPools(infos: SorobanPoolInfo[] | null): Promise<{ top: PoolSu
   ]);
   const pools = valued.map((pool) => withVolume(book, pool, isSoroban(pool) ? sorobanTrades : classicTrades));
   return {
-    top: pools.slice(0, TOP_POOLS),
+    top: pools,
     // no Soroban totals at all beats totals of zero
     totals: totalsOf(pools, soroban ? ["classic", "aquarius", "soroswap"] : ["classic"]),
   };
@@ -442,10 +442,10 @@ async function loadPools(infos: SorobanPoolInfo[] | null): Promise<{ top: PoolSu
 
 async function cachedPools(): Promise<{ top: PoolSummary[]; totals: ProtocolTotals[] }> {
   const infos = await cachedSorobanList().catch(sorobanFailed);
-  return cachedWith(() => loadPools(infos), ["pools"], 120);
+  return freshCache(() => loadPools(infos), ["pools"], { revalidate: 120 })();
 }
 
-/** The most valuable pools, classic and Soroban, live. Indexer only: null on testnet or when it failed. */
+/** Every pool we can value, classic and Soroban, most valuable first, live. Indexer only: null on testnet or when it failed. */
 export function getTopPools(): Promise<PoolSummary[] | null> {
   return indexerRead("top pools", async () => (await cachedPools()).top);
 }
@@ -761,4 +761,4 @@ async function loadProtocolActivity(
   return { pools: infos.length, activity };
 }
 
-const cachedProtocolActivity = unstable_cache(loadProtocolActivity, ["protocol-activity"], { revalidate: 60 });
+const cachedProtocolActivity = freshCache(loadProtocolActivity, ["protocol-activity"], { revalidate: 60 });

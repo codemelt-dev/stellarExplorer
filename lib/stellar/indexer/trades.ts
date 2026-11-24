@@ -5,8 +5,8 @@ import { toDexTrade, type ChTrade } from "./tradeView";
 
 /**
  * The DEX's latest fills, newest first: offers matched in the order book and
- * swaps with classic pools. The inner query finds the ledger `limit` fills
- * reach back to, so only those ledgers are read.
+ * swaps with classic pools, each with its transaction's hash. The inner query
+ * finds the ledger `limit` fills reach back to, so only those ledgers are read.
  */
 export async function indexedLatestTrades(limit: number): Promise<DexTrade[]> {
   const rows = await chQuery<ChTrade>(
@@ -20,5 +20,17 @@ export async function indexedLatestTrades(limit: number): Promise<DexTrade[]> {
      LIMIT {limit:UInt32}`,
     { limit, max: 0xffffffff },
   );
-  return rows.map(toDexTrade);
+  if (!rows.length) return [];
+  const ledgers = rows.map((r) => Number(r.ledger_sequence));
+  const hashes = await chQuery<{ ledger_sequence: number; tx_index: number; hash: string }>(
+    `SELECT ledger_sequence, tx_index, lower(hex(hash)) AS hash FROM transactions
+     WHERE ledger_sequence BETWEEN {from:UInt32} AND {to:UInt32} AND tx_index IN {txs:Array(UInt32)}`,
+    {
+      from: Math.min(...ledgers),
+      to: Math.max(...ledgers),
+      txs: `[${[...new Set(rows.map((r) => Number(r.tx_index)))].join(",")}]`,
+    },
+  );
+  const hashOf = new Map(hashes.map((h) => [`${h.ledger_sequence}-${h.tx_index}`, h.hash]));
+  return rows.map((r) => toDexTrade(r, hashOf.get(`${r.ledger_sequence}-${r.tx_index}`) ?? null));
 }

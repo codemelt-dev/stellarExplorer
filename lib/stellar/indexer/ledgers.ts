@@ -60,6 +60,22 @@ export const indexedLedger = cache(async (sequence: number): Promise<LedgerRow |
   return row ? toLedgerRow(row) : null;
 });
 
+// ledgers aren't keyed by hash, so a lookup reads only the newest few weeks;
+// over the full history it times out
+const HASH_WINDOW = 500_000;
+
+/** Sequence of the recent ledger with this hash, null when none matches. */
+export async function indexedLedgerByHash(hash: string): Promise<number | null> {
+  const [row] = await chQuery<{ sequence: number }>(
+    `SELECT sequence FROM ledgers
+     WHERE sequence > (SELECT max(sequence) FROM ledgers) - {window:UInt32}
+       AND hash = unhex({hash:String})
+     LIMIT 1`,
+    { hash, window: HASH_WINDOW },
+  );
+  return row ? Number(row.sequence) : null;
+}
+
 interface ChLedgerTx {
   tx_hash: string;
   successful: boolean | number;

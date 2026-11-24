@@ -18,9 +18,11 @@ import { StatTile } from "@/components/stats/StatTile";
 import { ProtocolIcon } from "@/components/defi/ProtocolIcon";
 import { ProtocolCharts } from "@/components/defi/ProtocolCharts";
 import { listHeadClass } from "@/components/layout/listTable";
+import { InfoHint } from "@/components/layout/InfoHint";
 import { PROTOCOL_LABEL } from "@/components/pool/PoolPair";
 import { getProtocols, PROTOCOLS, type ProtocolRow, type TvlBreakdownRow } from "@/lib/stellar/defi";
 import {
+  CLASSIC_POOLS,
   getProtocolTotals,
   getProtocolTvlHistory,
   getProtocolVolumeHistory,
@@ -29,8 +31,10 @@ import {
   type ProtocolVolumeDay,
   type ProtocolTotals,
 } from "@/lib/stellar/pools";
+import { getOrderBookTotals } from "@/lib/stellar/orderBook";
 import { protocolLogo } from "@/lib/stellar/protocols";
 import { compactUsd, percentGap } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "DeFi on Stellar · Stellar Explorer" };
 
@@ -46,6 +50,15 @@ const INDEXED: Array<{ protocol: PoolProtocol; slug: string | null }> = [
   { protocol: "soroswap", slug: "soroswap" },
 ];
 
+const ORDER_BOOK = "stellar-dex";
+
+// our figures for a protocol; the order book has no pools to count
+interface Ours {
+  pools: number | null;
+  tvlUsd: number;
+  volume24hUsd: number;
+}
+
 interface Row {
   key: string;
   name: string;
@@ -53,20 +66,38 @@ interface Row {
   href: string;
   logo: string | null;
   indexed: boolean;
-  ours: ProtocolTotals | null;
+  ours: Ours | null;
   llama: ProtocolRow | null;
 }
 
+// we read only the most valuable classic pools, so a full read means there are more
+const capped = (r: Row) => r.key === "classic" && (r.ours?.pools ?? 0) >= CLASSIC_POOLS;
+
+// the index measured it: pools found, or value on the order book
+const counted = (r: Row) => r.ours !== null && (r.ours.pools === null ? r.ours.tvlUsd > 0 : r.ours.pools > 0);
+
 export default async function DefiPage() {
-  const [totals, llama, history, volume] = await Promise.all([
+  const [totals, llama, history, volume, orderBook] = await Promise.all([
     getProtocolTotals(),
     getProtocols(),
     getProtocolTvlHistory(),
     getProtocolVolumeHistory(),
+    getOrderBookTotals(),
   ]);
   const llamaBySlug = new Map(llama.map((p) => [p.slug, p]));
 
-  const indexedRows: Row[] = INDEXED.map(({ protocol, slug }) => {
+  const dex = PROTOCOLS.find((p) => p.slug === ORDER_BOOK)!;
+  const orderBookRow: Row = {
+    key: ORDER_BOOK,
+    name: dex.name,
+    kind: dex.kind,
+    href: `/defi/${ORDER_BOOK}`,
+    logo: protocolLogo(ORDER_BOOK),
+    indexed: true,
+    ours: orderBook && { pools: null, tvlUsd: orderBook.tvlUsd, volume24hUsd: orderBook.volume24hUsd },
+    llama: llamaBySlug.get(ORDER_BOOK) ?? null,
+  };
+  const poolRows: Row[] = INDEXED.map(({ protocol, slug }) => {
     const meta = PROTOCOLS.find((p) => p.slug === slug);
     return {
       key: protocol,
@@ -79,7 +110,10 @@ export default async function DefiPage() {
       llama: (slug && llamaBySlug.get(slug)) || null,
     };
   });
-  const otherRows: Row[] = PROTOCOLS.filter((p) => !INDEXED.some((i) => i.slug === p.slug)).map((p) => ({
+  const indexedRows = [...poolRows, orderBookRow];
+  const otherRows: Row[] = PROTOCOLS.filter(
+    (p) => p.slug !== ORDER_BOOK && !INDEXED.some((i) => i.slug === p.slug),
+  ).map((p) => ({
     key: p.slug,
     name: p.name,
     kind: p.kind,
@@ -96,7 +130,7 @@ export default async function DefiPage() {
 
   const sum = (value: (t: ProtocolTotals) => number) => (totals ?? []).reduce((s, t) => s + value(t), 0);
   // the comparison only counts protocols both sides measure
-  const both = indexedRows.filter((r) => r.ours && r.ours.pools > 0 && r.llama?.tvl);
+  const both = indexedRows.filter((r) => counted(r) && r.llama?.tvl);
   const oursBoth = both.reduce((s, r) => s + r.ours!.tvlUsd, 0);
   const llamaBoth = both.reduce((s, r) => s + r.llama!.tvl!, 0);
 
@@ -108,12 +142,11 @@ export default async function DefiPage() {
           <Badge variant="outline" className="text-dim">
             mainnet
           </Badge>
-          <span className="ml-auto text-xs text-dim">data: Astrolabe · DefiLlama</span>
         </div>
         <p className="max-w-3xl text-sm text-dim">
-          Value locked and trading in Stellar&apos;s AMM pools, computed from our own index: the
-          classic pools and the Soroban pools of Aquarius and Soroswap. DefiLlama&apos;s figures sit
-          next to ours for comparison.
+          Value locked and trading on Stellar&apos;s exchanges, computed from our own index: the
+          order book, the classic pools and the Soroban pools of Aquarius and Soroswap.
+          DefiLlama&apos;s figures sit next to ours for comparison.
         </p>
       </div>
 
@@ -121,16 +154,16 @@ export default async function DefiPage() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatTile
             label="Value locked"
-            info="Both sides of every pool we can value, at prices from our own pools."
-            value={usd(sum((t) => t.tvlUsd))}
-            caption={`${sum((t) => t.pools).toLocaleString("en-US")} pools`}
+            info="Both sides of every pool we can value, plus what open offers sell on the order book, at prices from our own pools."
+            value={usd(sum((t) => t.tvlUsd) + (orderBook?.tvlUsd ?? 0))}
+            caption={`${sum((t) => t.pools).toLocaleString("en-US")}${totals.some((t) => t.protocol === "classic" && t.pools >= CLASSIC_POOLS) ? "+" : ""} pools${orderBook?.tvlUsd ? " and the order book" : ""}`}
             icon={Droplets}
           />
           <StatTile
             label="Volume 24h"
-            info="Trades through those pools over the last 17,280 ledgers (about a day), valued at today's prices."
-            value={usd(sum((t) => t.volume24hUsd))}
-            caption={`${sum((t) => t.trades24h).toLocaleString("en-US")} trades`}
+            info="Trades through those pools and fills on the order book over the last 17,280 ledgers (about a day), valued at today's prices."
+            value={usd(sum((t) => t.volume24hUsd) + (orderBook?.volume24hUsd ?? 0))}
+            caption={`${(sum((t) => t.trades24h) + (orderBook?.trades24h ?? 0)).toLocaleString("en-US")} trades`}
             icon={TrendingUp}
           />
           <StatTile
@@ -164,23 +197,32 @@ export default async function DefiPage() {
       <HistoryCard tvl={history} volume={volume} />
 
       <section id="protocols" className="flex scroll-mt-24 flex-col gap-3">
-        <h2 className="text-lg font-semibold">By protocol</h2>
+        <div className="flex items-center gap-1.5">
+          <h2 className="text-lg font-semibold">By protocol</h2>
+          <InfoHint label="By protocol">{HINT.byProtocol}</InfoHint>
+          <Link
+            href="/liquidity-pools"
+            className="ml-auto text-xs text-gold underline-offset-4 hover:underline"
+          >
+            See every pool
+          </Link>
+        </div>
         <Card className="gap-0 overflow-hidden p-0">
           <Table>
             <TableHeader className={listHeadClass}>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-4">Protocol</TableHead>
-                <TableHead className="text-right">Pools</TableHead>
-                <TableHead className="text-right">TVL, ours</TableHead>
-                <TableHead className="text-right">TVL, DefiLlama</TableHead>
+                <HintedHead label="Pools" hint={HINT.pools} />
+                <HintedHead label="TVL, ours" hint={HINT.tvlOurs} />
+                <HintedHead label="TVL, DefiLlama" hint={HINT.llama} />
                 <TableHead className="text-right">Gap</TableHead>
-                <TableHead className="text-right">Vol 24h, ours</TableHead>
-                <TableHead className="pr-4 text-right">Vol 24h, DefiLlama</TableHead>
+                <HintedHead label="Vol 24h, ours" hint={HINT.volumeOurs} />
+                <HintedHead label="Vol 24h, DefiLlama" hint={HINT.llama} className="pr-4" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((r) => {
-                const counted = r.ours !== null && r.ours.pools > 0;
+                const measured = counted(r);
                 return (
                   <ClickableRow
                     key={r.key}
@@ -202,12 +244,14 @@ export default async function DefiPage() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right font-mono text-dim tabular-nums">
-                      {counted ? r.ours!.pools.toLocaleString("en-US") : "–"}
+                      {measured && r.ours!.pools !== null
+                        ? `${r.ours!.pools.toLocaleString("en-US")}${capped(r) ? "+" : ""}`
+                        : "–"}
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
                       {!r.indexed ? (
                         <span className="font-sans text-xs text-dim">not indexed yet</span>
-                      ) : counted ? (
+                      ) : measured ? (
                         usd(r.ours!.tvlUsd)
                       ) : (
                         "–"
@@ -223,10 +267,10 @@ export default async function DefiPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono text-dim tabular-nums">
-                      {counted && r.llama?.tvl ? percentGap(r.ours!.tvlUsd, r.llama.tvl) : "–"}
+                      {measured && r.llama?.tvl ? percentGap(r.ours!.tvlUsd, r.llama.tvl) : "–"}
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
-                      {counted ? usd(r.ours!.volume24hUsd) : "–"}
+                      {measured ? usd(r.ours!.volume24hUsd) : "–"}
                     </TableCell>
                     <TableCell className="pr-4 text-right font-mono tabular-nums">
                       {r.llama?.volume24h ? compactUsd(r.llama.volume24h) : "–"}
@@ -243,39 +287,32 @@ export default async function DefiPage() {
           </p>
         )}
       </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">How we count</h2>
-        <Card className="p-5">
-          <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-dim">
-            <li>
-              Reserves are live from our indexer: the classic pools&apos; own state, Soroswap&apos;s{" "}
-              <span className="font-mono">sync</span> events and Aquarius&apos;s reserve and price
-              events. We count the 500 most valuable classic pools and every Aquarius and Soroswap
-              pool we find.
-            </li>
-            <li>
-              Prices come from our own pools. A pool counts once one side is XLM, USDC or another
-              deeply traded asset and that side is really held, so a pool of unpriced tokens
-              isn&apos;t counted and a junk token can&apos;t inflate one.
-            </li>
-            <li>
-              DefiLlama prices tokens from outside markets and reads Aquarius&apos;s pool list from its
-              router, so small gaps come from prices and from pools only one of us counts. Its
-              Stellar DEX figure is open orderbook offers, not pools, and it doesn&apos;t list the
-              classic AMM pools at all.
-            </li>
-            <li>
-              The chart above covers the last 90 days from our own index, and so do the Aquarius
-              and Soroswap pages. The other protocol pages use DefiLlama.{" "}
-              <Link href="/liquidity-pools" className="text-gold hover:underline underline-offset-4">
-                See every pool
-              </Link>
-            </li>
-          </ul>
-        </Card>
-      </section>
     </div>
+  );
+}
+
+// how each figure in the table is made, behind the ? beside its heading
+const HINT = {
+  pools:
+    "Reserves are live from our indexer: the classic pools' own state, Soroswap's sync events and Aquarius's reserve and price events. We count the 500 most valuable classic pools and every Aquarius and Soroswap pool we find.",
+  tvlOurs:
+    "Prices come from our own pools. A pool counts once one side is XLM, USDC or another deeply traded asset and that side is really held, so a pool of unpriced tokens isn't counted and a junk token can't inflate one. The order book's value locked is what open offers sell of those assets; an issuer's offers of its own asset don't count.",
+  volumeOurs:
+    "Each trade is valued by its XLM, USDC or deeply traded side, at prices from our own pools. Order book fills where an issuer hands over its own asset don't count: that's issuing, not trading.",
+  llama:
+    "DefiLlama prices tokens from outside markets and reads Aquarius's pool list from its router, so small gaps come from prices and from pools only one of us counts. It doesn't list the classic AMM pools at all.",
+  byProtocol:
+    "The chart above covers the last 90 days from our own index, and so do the Aquarius and Soroswap pages. The other protocol pages use DefiLlama.",
+};
+
+function HintedHead({ label, hint, className }: { label: string; hint: string; className?: string }) {
+  return (
+    <TableHead className={cn("text-right", className)}>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <InfoHint label={label}>{hint}</InfoHint>
+      </span>
+    </TableHead>
   );
 }
 

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Droplets, Layers, Repeat, Waves } from "lucide-react";
+import Link from "next/link";
+import { ArrowDown, ArrowUp, ArrowUpDown, Droplets, Layers, Repeat, Waves } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { ClickableRow } from "@/components/stellar/ClickableRow";
 import { EmptyState } from "@/components/states/EmptyState";
@@ -9,8 +10,9 @@ import { PROTOCOL_LABEL, PoolPair } from "@/components/pool/PoolPair";
 import { TypeTabs, type TypeTab } from "@/components/layout/TypeTabs";
 import { indexerActive } from "@/lib/stellar/indexer/client";
 import { activeNetwork } from "@/lib/stellar/network";
-import { getTopPools, type PoolProtocol } from "@/lib/stellar/pools";
+import { getTopPools, type PoolProtocol, type PoolSummary } from "@/lib/stellar/pools";
 import { compactUsd } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Liquidity pools · Stellar Explorer" };
 
@@ -24,6 +26,31 @@ const TABS: TypeTab<View>[] = [
   { id: "aquarius", label: "Aquarius", icon: Waves },
 ];
 
+// null is a pool without that figure (no trades today): it goes last either way
+type Sort = "tvl" | "volume" | "fees";
+type Dir = "desc" | "asc";
+const SORTS: Record<Sort, (p: PoolSummary) => number | null> = {
+  tvl: (p) => p.tvlUsd,
+  volume: (p) => (p.trades24h ? (p.volume24hUsd ?? 0) : null),
+  fees: (p) => (p.trades24h ? p.fees24hUsd : null),
+};
+
+function byColumn(sort: Sort, dir: Dir) {
+  const value = SORTS[sort];
+  const tvl = (p: PoolSummary) => p.tvlUsd ?? -1;
+  return (x: PoolSummary, y: PoolSummary) => {
+    const a = value(x);
+    const b = value(y);
+    if (a === null || b === null) return a === b ? tvl(y) - tvl(x) : a === null ? 1 : -1;
+    return (dir === "asc" ? a - b : b - a) || tvl(y) - tvl(x);
+  };
+}
+
+// the URL for a sort, keeping the protocol tab; TVL biggest first needs no params
+function sortQuery(sort: Sort, dir: Dir): Record<string, string> {
+  return { ...(sort !== "tvl" ? { sort } : {}), ...(dir === "asc" ? { dir } : {}) };
+}
+
 // fees and protocol drop out on narrow screens
 const poolGrid =
   "grid grid-cols-[2rem_minmax(0,1fr)_5rem_5rem] items-center gap-x-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_6rem_6rem_5rem] md:grid-cols-[2.5rem_minmax(0,1fr)_7rem_7rem_6rem_7rem]";
@@ -31,12 +58,17 @@ const poolGrid =
 export default async function LiquidityPoolsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string }>;
+  searchParams: Promise<{ type?: string; sort?: string; dir?: string }>;
 }) {
-  const { type } = await searchParams;
+  const { type, sort: sortParam, dir: dirParam } = await searchParams;
   const view = TABS.find((t) => t.id === type)?.id ?? "all";
+  const sort: Sort = sortParam === "volume" || sortParam === "fees" ? sortParam : "tvl";
+  const dir: Dir = dirParam === "asc" ? "asc" : "desc";
   const [all, active, network] = await Promise.all([getTopPools(), indexerActive(), activeNetwork()]);
-  const pools = all && (view === "all" ? all : all.filter((p) => p.protocol === view));
+  const pools =
+    all &&
+    (view === "all" ? all : all.filter((p) => p.protocol === view)).slice().sort(byColumn(sort, dir));
+  const head = { view, sort, dir };
 
   if (!pools) {
     return active ? (
@@ -60,11 +92,18 @@ export default async function LiquidityPoolsPage({
         <p className="max-w-3xl text-sm text-dim">
           Stellar&apos;s built-in AMM pools and the Soroban pools of Soroswap and Aquarius, ranked
           by value locked. A pool is valued by its XLM, USDC or deeply priced side, at prices from
-          our own pools, so a junk token can&apos;t inflate it. Live, refreshed every two minutes.
+          our own pools, so a junk token can&apos;t inflate it. We list the 500 most valuable built-in
+          pools and every Soroban pool we can value. Live, refreshed every two minutes.
         </p>
       </div>
 
-      <TypeTabs tabs={TABS} active={view} basePath="/liquidity-pools" label="Pool protocol" />
+      <TypeTabs
+        tabs={TABS}
+        active={view}
+        basePath="/liquidity-pools"
+        label="Pool protocol"
+        keep={sortQuery(sort, dir)}
+      />
 
       <Card id="pools" className="scroll-mt-24 gap-3 p-5 py-4">
         {pools.length === 0 ? (
@@ -72,12 +111,12 @@ export default async function LiquidityPoolsPage({
             message={
               view === "all"
                 ? "No pools could be valued right now."
-                : `No ${PROTOCOL_LABEL[view]} pools in the top ${all!.length} right now.`
+                : `No ${PROTOCOL_LABEL[view]} pools could be valued right now.`
             }
           />
         ) : (
           <PagedList
-            key={view}
+            key={`${view}-${sort}-${dir}`}
             topId="pools"
             className="flex flex-col"
             header={
@@ -86,9 +125,9 @@ export default async function LiquidityPoolsPage({
               >
                 <span>#</span>
                 <span>Pool</span>
-                <span className="text-right">TVL</span>
-                <span className="text-right">Vol 24h</span>
-                <span className="hidden text-right sm:block">Fees 24h</span>
+                <SortHead id="tvl" label="TVL" {...head} />
+                <SortHead id="volume" label="Vol 24h" {...head} />
+                <SortHead id="fees" label="Fees 24h" {...head} className="hidden sm:inline-flex" />
                 <span className="hidden text-right md:block">Protocol</span>
               </div>
             }
@@ -127,5 +166,50 @@ export default async function LiquidityPoolsPage({
         and Soroswap pools, set per pool on Aquarius.
       </p>
     </div>
+  );
+}
+
+// a column heading that sorts the list by itself, biggest first; clicking the
+// current one flips the order
+function SortHead({
+  id,
+  label,
+  view,
+  sort,
+  dir,
+  className,
+}: {
+  id: Sort;
+  label: string;
+  view: View;
+  sort: Sort;
+  dir: Dir;
+  className?: string;
+}) {
+  const current = id === sort;
+  const next: Dir = current && dir === "desc" ? "asc" : "desc";
+  const qs = new URLSearchParams({
+    ...(view !== "all" ? { type: view } : {}),
+    ...sortQuery(id, next),
+  }).toString();
+  const Icon = !current ? ArrowUpDown : dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <Link
+      href={qs ? `/liquidity-pools?${qs}` : "/liquidity-pools"}
+      scroll={false}
+      aria-label={`Sort by ${label}, ${next === "asc" ? "smallest" : "biggest"} first`}
+      aria-current={current ? "true" : undefined}
+      className={cn(
+        "group/sort inline-flex items-center justify-end gap-1 rounded-sm uppercase transition-colors duration-150",
+        current ? "text-foreground" : "hover:text-foreground",
+        className,
+      )}
+    >
+      <Icon
+        className={cn("size-3", !current && "opacity-40 group-hover/sort:opacity-100")}
+        aria-hidden="true"
+      />
+      {label}
+    </Link>
   );
 }

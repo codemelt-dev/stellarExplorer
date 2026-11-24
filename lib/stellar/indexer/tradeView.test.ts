@@ -32,7 +32,13 @@ describe("toDexTrade", () => {
       counterIssuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
       price: 0.25,
       venue: "orderbook",
+      txHash: null,
     });
+  });
+
+  it("carries the transaction hash it's given", () => {
+    const hash = "e3447298b30ef0bb74e7408936f50ced8a0e92d917039e45b6e15f83227c44e8";
+    expect(toDexTrade(row, hash).txHash).toBe(hash);
   });
 
   it("gives a pool swap the pool's hex id", () => {
