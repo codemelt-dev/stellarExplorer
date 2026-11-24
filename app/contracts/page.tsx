@@ -106,7 +106,7 @@ export default async function ContractsPage({
             <TableHeader className={listHeadClass}>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-4">Contract</TableHead>
-                <TableHead>What it is</TableHead>
+                <TableHead>Type</TableHead>
                 {view === "active" && (
                   <TableHead className="pr-4 text-right">Calls, {period.label}</TableHead>
                 )}
