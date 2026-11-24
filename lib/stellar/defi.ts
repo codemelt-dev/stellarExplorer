@@ -1,5 +1,5 @@
 import "server-only";
-import { unstable_cache } from "next/cache";
+import { freshCache } from "../cache";
 import { horizonFor } from "./horizon";
 import { getNetwork } from "./config";
 import { withIndexer } from "./indexer/client";
@@ -195,8 +195,8 @@ export interface DexTrade {
   txHash: string | null;
 }
 
-// throws on indexer errors so unstable_cache keeps only good results
-const cachedTrades = unstable_cache(indexedLatestTrades, ["dex-trades"], { revalidate: 60 });
+// throws on indexer errors so the cache keeps only good results
+const cachedTrades = freshCache(indexedLatestTrades, ["dex-trades"], { revalidate: 60 });
 
 // latest classic DEX fills (orderbook + liquidity pools), always mainnet
 export function getDexTrades(limit = 25): Promise<DexTrade[] | null> {

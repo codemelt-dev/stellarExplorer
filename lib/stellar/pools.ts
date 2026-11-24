@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
+import { freshCache } from "../cache";
 import { StrKey } from "@stellar/stellar-sdk";
 import { stroopsToLumens } from "./amount";
 import { fromAssetKey, type AssetIdentity } from "./assetId";
@@ -441,7 +442,7 @@ async function loadPools(infos: SorobanPoolInfo[] | null): Promise<{ top: PoolSu
 
 async function cachedPools(): Promise<{ top: PoolSummary[]; totals: ProtocolTotals[] }> {
   const infos = await cachedSorobanList().catch(sorobanFailed);
-  return cachedWith(() => loadPools(infos), ["pools"], 120);
+  return freshCache(() => loadPools(infos), ["pools"], { revalidate: 120 })();
 }
 
 /** Every pool we can value, classic and Soroban, most valuable first, live. Indexer only: null on testnet or when it failed. */
@@ -760,4 +761,4 @@ async function loadProtocolActivity(
   return { pools: infos.length, activity };
 }
 
-const cachedProtocolActivity = unstable_cache(loadProtocolActivity, ["protocol-activity"], { revalidate: 60 });
+const cachedProtocolActivity = freshCache(loadProtocolActivity, ["protocol-activity"], { revalidate: 60 });

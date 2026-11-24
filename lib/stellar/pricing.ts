@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { unstable_cache } from "next/cache";
+import { freshCache } from "../cache";
 import { assetKey, type AssetIdentity } from "./assetId";
 import { indexerActive, indexerRead, withIndexer } from "./indexer/client";
 import { indexedXlmPrice } from "./indexer/assets";
@@ -10,7 +10,7 @@ import { buildPriceBook, orderBookPrice, type AssetPrice, type PriceBook } from 
 export type { AssetPrice, PriceBook };
 
 // reserves move with every trade, a couple of minutes old is close enough
-const cachedPools = unstable_cache(indexedPricePools, ["price-pools"], { revalidate: 120 });
+const cachedPools = freshCache(indexedPricePools, ["price-pools"], { revalidate: 120 });
 
 /** Mainnet prices from our own pools, whatever network is selected. Null when the indexer is off or failed. */
 export const getPriceBook = cache(

@@ -1,5 +1,6 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
+import { freshCache } from "../cache";
 import { withIndexer } from "./indexer/client";
 import { indexedPricePools } from "./indexer/prices";
 import { indexedOffers, indexedOffersDaily, indexedOrderBookTrades, type ChOffers } from "./indexer/orderBook";
@@ -51,7 +52,7 @@ async function loadTotals(): Promise<OrderBookTotals> {
   };
 }
 
-const cachedTotals = unstable_cache(loadTotals, ["order-book-totals"], { revalidate: 120 });
+const cachedTotals = freshCache(loadTotals, ["order-book-totals"], { revalidate: 120 });
 
 /** Value on offer and 24h fills. Mainnet facts shown on every network; null when the indexer is off or failed. */
 export function getOrderBookTotals(): Promise<OrderBookTotals | null> {

@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { unstable_cache } from "next/cache";
+import { freshCache } from "../cache";
 import { Address, StrKey, xdr, scValToNative, contract } from "@stellar/stellar-sdk";
 import { Server } from "@stellar/stellar-sdk/rpc";
 import { activeNetwork } from "./network";
@@ -177,7 +177,7 @@ export interface ContractDirectoryPage {
 const DIRECTORY_PAGE = 50;
 
 // a week of calls takes most of a second to count, so the ranking is kept a few minutes
-const cachedActive = unstable_cache(
+const cachedActive = freshCache(
   (days: number) => indexedActiveContracts(DIRECTORY_PAGE, days),
   ["active-contracts"],
   { revalidate: 300 },
