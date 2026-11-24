@@ -18,6 +18,7 @@ import { StatTile } from "@/components/stats/StatTile";
 import { ProtocolIcon } from "@/components/defi/ProtocolIcon";
 import { ProtocolCharts } from "@/components/defi/ProtocolCharts";
 import { listHeadClass } from "@/components/layout/listTable";
+import { InfoHint } from "@/components/layout/InfoHint";
 import { PROTOCOL_LABEL } from "@/components/pool/PoolPair";
 import { getProtocols, PROTOCOLS, type ProtocolRow, type TvlBreakdownRow } from "@/lib/stellar/defi";
 import {
@@ -33,6 +34,7 @@ import {
 import { getOrderBookTotals } from "@/lib/stellar/orderBook";
 import { protocolLogo } from "@/lib/stellar/protocols";
 import { compactUsd, percentGap } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "DeFi on Stellar · Stellar Explorer" };
 
@@ -195,18 +197,27 @@ export default async function DefiPage() {
       <HistoryCard tvl={history} volume={volume} />
 
       <section id="protocols" className="flex scroll-mt-24 flex-col gap-3">
-        <h2 className="text-lg font-semibold">By protocol</h2>
+        <div className="flex items-center gap-1.5">
+          <h2 className="text-lg font-semibold">By protocol</h2>
+          <InfoHint label="By protocol">{HINT.byProtocol}</InfoHint>
+          <Link
+            href="/liquidity-pools"
+            className="ml-auto text-xs text-gold underline-offset-4 hover:underline"
+          >
+            See every pool
+          </Link>
+        </div>
         <Card className="gap-0 overflow-hidden p-0">
           <Table>
             <TableHeader className={listHeadClass}>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-4">Protocol</TableHead>
-                <TableHead className="text-right">Pools</TableHead>
-                <TableHead className="text-right">TVL, ours</TableHead>
-                <TableHead className="text-right">TVL, DefiLlama</TableHead>
+                <HintedHead label="Pools" hint={HINT.pools} />
+                <HintedHead label="TVL, ours" hint={HINT.tvlOurs} />
+                <HintedHead label="TVL, DefiLlama" hint={HINT.llama} />
                 <TableHead className="text-right">Gap</TableHead>
-                <TableHead className="text-right">Vol 24h, ours</TableHead>
-                <TableHead className="pr-4 text-right">Vol 24h, DefiLlama</TableHead>
+                <HintedHead label="Vol 24h, ours" hint={HINT.volumeOurs} />
+                <HintedHead label="Vol 24h, DefiLlama" hint={HINT.llama} className="pr-4" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -276,43 +287,32 @@ export default async function DefiPage() {
           </p>
         )}
       </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">How we count</h2>
-        <Card className="p-5">
-          <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-dim">
-            <li>
-              Reserves are live from our indexer: the classic pools&apos; own state, Soroswap&apos;s{" "}
-              <span className="font-mono">sync</span> events and Aquarius&apos;s reserve and price
-              events. We count the 500 most valuable classic pools and every Aquarius and Soroswap
-              pool we find.
-            </li>
-            <li>
-              Prices come from our own pools. A pool counts once one side is XLM, USDC or another
-              deeply traded asset and that side is really held, so a pool of unpriced tokens
-              isn&apos;t counted and a junk token can&apos;t inflate one.
-            </li>
-            <li>
-              The order book&apos;s value locked is what open offers sell of XLM, USDC and other
-              deeply traded assets. An issuer&apos;s offers of its own asset don&apos;t count, nor do
-              fills where an issuer hands over its own asset: that&apos;s issuing, not trading.
-            </li>
-            <li>
-              DefiLlama prices tokens from outside markets and reads Aquarius&apos;s pool list from its
-              router, so small gaps come from prices and from pools only one of us counts. It
-              doesn&apos;t list the classic AMM pools at all.
-            </li>
-            <li>
-              The chart above covers the last 90 days from our own index, and so do the Aquarius
-              and Soroswap pages. The other protocol pages use DefiLlama.{" "}
-              <Link href="/liquidity-pools" className="text-gold hover:underline underline-offset-4">
-                See every pool
-              </Link>
-            </li>
-          </ul>
-        </Card>
-      </section>
     </div>
+  );
+}
+
+// how each figure in the table is made, behind the ? beside its heading
+const HINT = {
+  pools:
+    "Reserves are live from our indexer: the classic pools' own state, Soroswap's sync events and Aquarius's reserve and price events. We count the 500 most valuable classic pools and every Aquarius and Soroswap pool we find.",
+  tvlOurs:
+    "Prices come from our own pools. A pool counts once one side is XLM, USDC or another deeply traded asset and that side is really held, so a pool of unpriced tokens isn't counted and a junk token can't inflate one. The order book's value locked is what open offers sell of those assets; an issuer's offers of its own asset don't count.",
+  volumeOurs:
+    "Each trade is valued by its XLM, USDC or deeply traded side, at prices from our own pools. Order book fills where an issuer hands over its own asset don't count: that's issuing, not trading.",
+  llama:
+    "DefiLlama prices tokens from outside markets and reads Aquarius's pool list from its router, so small gaps come from prices and from pools only one of us counts. It doesn't list the classic AMM pools at all.",
+  byProtocol:
+    "The chart above covers the last 90 days from our own index, and so do the Aquarius and Soroswap pages. The other protocol pages use DefiLlama.",
+};
+
+function HintedHead({ label, hint, className }: { label: string; hint: string; className?: string }) {
+  return (
+    <TableHead className={cn("text-right", className)}>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <InfoHint label={label}>{hint}</InfoHint>
+      </span>
+    </TableHead>
   );
 }
 
