@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine } from "lucide-react";
 import { Address } from "@/components/stellar/Address";
+import { ClickableRow } from "@/components/stellar/ClickableRow";
 import { Amount } from "@/components/stellar/Amount";
 import { Time } from "@/components/stellar/Time";
 import { PoolPair, assetCodeOf } from "@/components/pool/PoolPair";
@@ -15,7 +16,8 @@ const KIND = {
 
 const issuerOf = (identity: AssetIdentity) => (identity.kind === "issued" ? identity.issuer : undefined);
 
-// one trade, deposit or withdrawal; across many pools it also names the pool
+// one trade, deposit or withdrawal, the whole row opens its transaction;
+// across many pools it also names the pool
 export function PoolActivityRow({
   activity,
   pool,
@@ -24,8 +26,10 @@ export function PoolActivityRow({
   pool?: { id: string; a: AssetIdentity; b: AssetIdentity };
 }) {
   const { icon: Icon, verb, join } = KIND[activity.kind];
-  return (
-    <div className="flex flex-col gap-1.5 border-b border-border py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+  const className =
+    "flex flex-col gap-1.5 border-b border-border py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4";
+  const cells = (
+    <>
       <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
         <Icon className="size-4 shrink-0 text-dim" aria-hidden="true" />
         <span className="text-dim">{verb}</span>
@@ -59,6 +63,13 @@ export function PoolActivityRow({
           <Time iso={activity.createdAt} />
         )}
       </div>
-    </div>
+    </>
+  );
+  return activity.txHash ? (
+    <ClickableRow as="div" href={`/tx/${activity.txHash}`} className={className}>
+      {cells}
+    </ClickableRow>
+  ) : (
+    <div className={className}>{cells}</div>
   );
 }
