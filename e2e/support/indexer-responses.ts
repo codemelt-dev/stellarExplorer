@@ -110,9 +110,14 @@ function clickhouseResponse(
   } else if (
     body.includes("FROM trades") &&
     (body.includes("GROUP BY hour") ||
-      body.includes("seller, buyer, sold_asset"))
+      body.includes("seller, buyer, sold_asset") ||
+      body.includes("venue = 'orderbook'"))
   ) {
-    // Market decoration and latest DEX fills have no activity in the base corpus.
+    // Market decoration, latest DEX fills and the order book's 24h fills have
+    // no activity in the base corpus.
+    rows = [];
+  } else if (body.includes("FROM assets") && body.includes("on_offers > 0")) {
+    // Nothing is on offer in the order book, so its value locked is zero.
     rows = [];
   } else if (body.includes("FROM assets") && body.includes("WHERE asset =")) {
     const asset = url.searchParams.get("param_asset");
@@ -158,6 +163,12 @@ function clickhouseResponse(
     body.includes("uniq(caller)")
   ) {
     rows = indexedTopContracts;
+  } else if (
+    body.includes("FROM contract_calls") &&
+    body.includes("WITH page AS")
+  ) {
+    // No calls indexed for any contract: its page opens on the events tab.
+    rows = [];
   } else if (body.includes("AS day FROM ledgers")) {
     // the indexer holds yesterday and today, so pool history has two days
     rows = [utcDay(-1), utcDay(0)].map((day) => ({ day }));
