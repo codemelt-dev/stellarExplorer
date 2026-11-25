@@ -28,11 +28,14 @@ export const PROTOCOLS: TrackedProtocol[] = [
   { slug: "phoenix-defi-hub", name: "Phoenix", kind: "AMM" },
 ];
 
-// Stellar's built-in pools: not a DefiLlama protocol, so they open the pool list
+// Stellar's built-in pools: not a DefiLlama protocol, their page is all ours
 export const CLASSIC_AMM = {
+  slug: "stellar-amm",
   name: "Stellar AMM",
   kind: "Classic AMM pools",
-  href: "/liquidity-pools?type=classic",
+  href: "/defi/stellar-amm",
+  description:
+    "Stellar's built-in liquidity pools: constant product pools of two assets, run by the network itself with a 0.30% fee, no smart contract involved.",
 };
 
 export function protocolLogo(slug: string, size = 48): string {

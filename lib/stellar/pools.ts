@@ -725,20 +725,22 @@ export const getPool = cache(
     }),
 );
 
-// three days covers even a quiet protocol's latest few dozen operations
+// three days covers even a quiet protocol's latest few dozen operations; the
+// classic pools trade every few seconds, so an hour holds plenty of theirs
 const PROTOCOL_ACTIVITY_LEDGERS = 3 * LEDGERS_PER_DAY;
+const CLASSIC_ACTIVITY_LEDGERS = LEDGERS_PER_DAY / 24;
 
 /**
- * The latest trades, deposits and withdrawals across a Soroban protocol's
- * pools we track, and how many pools that is. Mainnet facts shown on every
- * network; null when the indexer is off or failed.
+ * The latest trades, deposits and withdrawals across a protocol's pools we
+ * track, and how many pools that is. Mainnet facts shown on every network;
+ * null when the indexer is off or failed.
  */
 export function getProtocolActivity(
-  protocol: SorobanProtocol,
+  protocol: PoolProtocol,
 ): Promise<{ pools: number; activity: ProtocolActivity[] } | null> {
   return withIndexer<{ pools: number; activity: ProtocolActivity[] } | null>(
     `${protocol} activity`,
-    () => cachedProtocolActivity(protocol),
+    () => (protocol === "classic" ? classicActivity() : cachedProtocolActivity(protocol)),
     async () => null,
     { anyNetwork: true },
   );
@@ -751,7 +753,8 @@ async function loadProtocolActivity(
 ): Promise<{ pools: number; activity: ProtocolActivity[] }> {
   const infos = (await cachedSorobanList()).filter((i) => i.protocol === protocol);
   const byAddress = new Map(infos.map((i) => [i.id, i]));
-  const ops = await indexedPoolsActivity(tokensByPool(infos), PROTOCOL_ACTIVITY_LEDGERS, ACTIVITY);
+  const tokens = tokensByPool(infos);
+  const ops = await indexedPoolsActivity(Object.keys(tokens), PROTOCOL_ACTIVITY_LEDGERS, ACTIVITY, tokens);
   const activity = ops.flatMap((op) => {
     const read = activityOf(op);
     const info = byAddress.get(op.pool);
@@ -760,5 +763,26 @@ async function loadProtocolActivity(
   });
   return { pools: infos.length, activity };
 }
+
+// the classic pools come from the cached pool list, and a cache read inside
+// another one goes uncached, so only their operations are cached, by address
+async function classicActivity(): Promise<{ pools: number; activity: ProtocolActivity[] }> {
+  const pools = (await cachedPools()).top.filter((p) => p.protocol === "classic");
+  const byAddress = new Map(pools.map((p) => [p.address, p]));
+  const ops = await cachedClassicOps([...byAddress.keys()].sort());
+  const activity = ops.flatMap((op) => {
+    const read = activityOf(op);
+    const pool = byAddress.get(op.pool);
+    if (!read || !pool) return [];
+    return [{ ...read, pool: { id: pool.id, a: pool.a.identity, b: pool.b.identity } }];
+  });
+  return { pools: pools.length, activity };
+}
+
+const cachedClassicOps = freshCache(
+  (addresses: string[]) => indexedPoolsActivity(addresses, CLASSIC_ACTIVITY_LEDGERS, ACTIVITY),
+  ["classic-activity"],
+  { revalidate: 60 },
+);
 
 const cachedProtocolActivity = freshCache(loadProtocolActivity, ["protocol-activity"], { revalidate: 60 });

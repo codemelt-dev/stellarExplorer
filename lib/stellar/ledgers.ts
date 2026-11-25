@@ -79,8 +79,9 @@ export const getLedger = cache(async (sequence: number): Promise<LedgerRow> =>
   ),
 );
 
-/** Sequence of the ledger with this hash, searched among recent ledgers only. */
+/** Sequence of the ledger with this hash, over the full history. */
 export async function findLedgerByHash(hash: string): Promise<number | null> {
+  // anything but a 64 character hex hash misses the hash index and reads every ledger
   if (!/^[0-9a-f]{64}$/i.test(hash)) return null;
   return withIndexer("ledger by hash", () => indexedLedgerByHash(hash.toLowerCase()), async () => null);
 }

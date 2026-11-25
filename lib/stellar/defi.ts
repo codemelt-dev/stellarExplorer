@@ -1,10 +1,11 @@
 import "server-only";
+import { Horizon } from "@stellar/stellar-sdk";
 import { freshCache } from "../cache";
 import { horizonFor } from "./horizon";
 import { getNetwork } from "./config";
 import { withIndexer } from "./indexer/client";
 import { indexedLatestTrades } from "./indexer/trades";
-import { PROTOCOLS, protocolLogo } from "./protocols";
+import { CLASSIC_AMM, PROTOCOLS, protocolLogo } from "./protocols";
 
 // mainnet DeFi data from public sources, no keys. Everything is
 // edge-cached via fetch revalidate so we never hammer the APIs
@@ -81,7 +82,8 @@ export interface ProtocolDetail {
   slug: string;
   name: string;
   kind: string;
-  logo: string;
+  /** Null for Stellar's own pools, drawn with the Stellar mark. */
+  logo: string | null;
   description: string | null;
   website: string | null;
   currentTvl: number | null;
@@ -91,6 +93,11 @@ export interface ProtocolDetail {
 export async function getProtocolDetail(
   slug: string,
 ): Promise<ProtocolDetail | null> {
+  // not on DefiLlama: everything on its page comes from our index
+  if (slug === CLASSIC_AMM.slug) {
+    const { name, kind, description } = CLASSIC_AMM;
+    return { slug, name, kind, logo: null, description, website: null, currentTvl: null, tvlHistory: [] };
+  }
   const meta = PROTOCOLS.find((p) => p.slug === slug);
   if (!meta) return null;
 
@@ -196,9 +203,9 @@ export interface DexTrade {
 }
 
 // throws on indexer errors so the cache keeps only good results
-const cachedTrades = freshCache(indexedLatestTrades, ["dex-trades"], { revalidate: 60 });
+const cachedTrades = freshCache(indexedLatestTrades, ["order-book-fills"], { revalidate: 60 });
 
-// latest classic DEX fills (orderbook + liquidity pools), always mainnet
+// the order book's latest fills, always mainnet
 export function getDexTrades(limit = 25): Promise<DexTrade[] | null> {
   return withIndexer("dex trades", () => cachedTrades(limit), () => horizonDexTrades(limit), {
     anyNetwork: true,
@@ -209,6 +216,7 @@ async function horizonDexTrades(limit: number): Promise<DexTrade[] | null> {
   try {
     const page = await horizonFor(getNetwork("mainnet").horizonUrl)
       .trades()
+      .forType(Horizon.ServerApi.TradeType.orderbook)
       .order("desc")
       .limit(limit)
       .call();
