@@ -193,6 +193,7 @@ export interface ChPoolDayFlow {
 /**
  * What went into each pool minus what came out, per asset and UTC day, from
  * `since` on. Every kind of movement counts: trades, liquidity, clawbacks.
+ * Months of every pool's transfers add up faster on four threads.
  */
 export async function indexedPoolDailyFlows(pools: string[], since: string): Promise<ChPoolDayFlow[]> {
   if (!pools.length) return [];
@@ -200,7 +201,8 @@ export async function indexedPoolDailyFlows(pools: string[], since: string): Pro
     `SELECT account AS pool, toString(toDate(closed_at)) AS day, ${KEY} AS asset_key, toString(sum(amount)) AS net
      FROM transfers_by_account
      WHERE account IN {pools:Array(String)} AND kind != 'fee' AND closed_at >= {since:Date}
-     GROUP BY pool, day, asset_key`,
+     GROUP BY pool, day, asset_key
+     SETTINGS max_threads = 4`,
     { pools: list(pools), since },
   );
 }
@@ -256,15 +258,15 @@ export async function indexedPoolActivity(pool: string, limit: number, tokens?: 
 }
 
 /**
- * The latest operations across many Soroban pools over the last `ledgers`
- * ledgers, newest first, each pool with its token contracts.
+ * The latest operations across many pools over the last `ledgers` ledgers,
+ * newest first. Soroban pools pass their token contracts by pool address.
  */
 export async function indexedPoolsActivity(
-  tokens: Record<string, string[]>,
+  pools: string[],
   ledgers: number,
   limit: number,
+  tokens?: Record<string, string[]>,
 ): Promise<ChPoolOp[]> {
-  const pools = Object.keys(tokens);
   if (!pools.length) return [];
   const window = "ledger_sequence > (SELECT max(sequence) FROM ledgers) - {ledgers:UInt32}";
   const rows = await chQuery<{
@@ -280,11 +282,10 @@ export async function indexedPoolsActivity(
             any(counterparty) AS op_counterparty, groupArray((${KEY}, toString(amount))) AS legs
      FROM transfers_by_account
      WHERE account IN {pools:Array(String)} AND kind = 'transfer' AND ${window}
-       AND (account, contract_id) IN {legs:Array(Tuple(String, String))}
-       ${noRewards("{pools:Array(String)}", window)}
+       ${tokens ? `AND (account, contract_id) IN {legs:Array(Tuple(String, String))} ${noRewards("{pools:Array(String)}", window)}` : ""}
      GROUP BY account, ledger_sequence, tx_index, op_index
      ORDER BY ledger_sequence DESC, tx_index DESC, op_index DESC LIMIT {limit:UInt32}`,
-    { pools: list(pools), legs: legsOf(tokens), ledgers, limit },
+    { pools: list(pools), ledgers, limit, ...(tokens && { legs: legsOf(tokens) }) },
   );
   return withHashes(
     rows.map(({ op_pool, op_time, op_counterparty, ...r }) => ({

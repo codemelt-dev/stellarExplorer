@@ -5,7 +5,7 @@ import { horizon } from "./horizon";
 import { NotFoundError } from "./transactions";
 import type { OperationRecord } from "./transactions";
 import { withIndexer } from "./indexer/client";
-import { indexedAccount, indexedAccountOperations } from "./indexer/accounts";
+import { indexedAccount, indexedAccountOperations, TAB_ROLE } from "./indexer/accounts";
 
 export type BalanceLine =
   | { asset_type: "native"; balance: string }
@@ -138,11 +138,13 @@ async function indexedHistory(id: string, options: HistoryOptions): Promise<Oper
   if (!StrKey.isValidEd25519PublicKey(id)) return null;
   const { cursor, direction = "older", limit = 10, filter = "all" } = options;
   const goingNewer = direction === "newer" && !!cursor;
+  const role = filter === "trades" || filter === "contracts" ? TAB_ROLE[filter] : undefined;
   const page = await indexedAccountOperations(id, {
     cursor,
     newer: goingNewer,
     limit,
     types: filterTypes(filter),
+    role,
   });
   if (!page) return null;
 
@@ -155,7 +157,8 @@ async function indexedHistory(id: string, options: HistoryOptions): Promise<Oper
     prevCursor: records[0]?.paging_token ?? null,
     nextCursor: goingNewer ? (records[records.length - 1]?.paging_token ?? null) : page.cursor,
     hasNewer: !!cursor,
-    hasOlder: goingNewer || !page.exhausted || (await olderOnHorizon(id, page.cursor)),
+    // a tab read by role covers the full history: once it runs out there is no more
+    hasOlder: goingNewer || !page.exhausted || (!role && (await olderOnHorizon(id, page.cursor))),
   };
 }
 

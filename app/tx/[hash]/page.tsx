@@ -61,7 +61,7 @@ export default async function TransactionPage({
       return (
         <EmptyState
           icon={SearchX}
-          message={`No transaction with hash ${truncateKey(hash, 8)} on ${netLabel}, and no recent ledger either. It may be on another network, or the hash may be mistyped.`}
+          message={`No transaction with hash ${truncateKey(hash, 8)} on ${netLabel}, and no ledger either. It may be on another network, or the hash may be mistyped.`}
           className="py-24"
         />
       );

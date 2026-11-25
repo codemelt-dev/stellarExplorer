@@ -38,7 +38,8 @@ export async function getTopProtocols(): Promise<TopProtocol[]> {
   const rows: TopProtocol[] = [];
   const classic = ours.get("classic");
   if (classic) {
-    rows.push({ key: "classic", ...CLASSIC_AMM, logo: null, tvl: classic.tvl, volume24h: classic.volume24h, change1d: null, llama: false });
+    const { name, kind, href } = CLASSIC_AMM;
+    rows.push({ key: "classic", name, kind, href, logo: null, tvl: classic.tvl, volume24h: classic.volume24h, change1d: null, llama: false });
   }
   for (const p of PROTOCOLS) {
     const base = { key: p.slug, name: p.name, kind: p.kind, href: `/defi/${p.slug}`, logo: protocolLogo(p.slug) };

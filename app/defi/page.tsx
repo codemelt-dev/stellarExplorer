@@ -32,7 +32,7 @@ import {
   type ProtocolTotals,
 } from "@/lib/stellar/pools";
 import { getOrderBookTotals } from "@/lib/stellar/orderBook";
-import { protocolLogo } from "@/lib/stellar/protocols";
+import { CLASSIC_AMM, protocolLogo } from "@/lib/stellar/protocols";
 import { compactUsd, percentGap } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -102,8 +102,8 @@ export default async function DefiPage() {
     return {
       key: protocol,
       name: PROTOCOL_LABEL[protocol],
-      kind: meta?.kind ?? "Classic AMM pools",
-      href: slug ? `/defi/${slug}` : "/liquidity-pools?type=classic",
+      kind: meta?.kind ?? CLASSIC_AMM.kind,
+      href: slug ? `/defi/${slug}` : CLASSIC_AMM.href,
       logo: slug && protocolLogo(slug),
       indexed: true,
       ours: totals?.find((t) => t.protocol === protocol) ?? null,
@@ -302,7 +302,7 @@ const HINT = {
   llama:
     "DefiLlama prices tokens from outside markets and reads Aquarius's pool list from its router, so small gaps come from prices and from pools only one of us counts. It doesn't list the classic AMM pools at all.",
   byProtocol:
-    "The chart above covers the last 90 days from our own index, and so do the Aquarius and Soroswap pages. The other protocol pages use DefiLlama.",
+    "The chart above covers the last 90 days from our own index, and so do the Stellar AMM, Stellar DEX, Aquarius and Soroswap pages, with DefiLlama only in their comparison table. The other protocol pages use DefiLlama.",
 };
 
 function HintedHead({ label, hint, className }: { label: string; hint: string; className?: string }) {

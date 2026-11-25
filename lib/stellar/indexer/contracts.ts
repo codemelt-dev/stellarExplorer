@@ -294,7 +294,9 @@ export async function indexedContractsById(ids: string[]): Promise<IndexedContra
   });
 }
 
-/** Contracts with the most calls over the last `days` days. Past a week the read gets slow. */
+// a ranking adds up every call in the window, so it reads on four threads. Keep
+// `days` to 30 at most: 90 days of calls don't fit in the time limit
+/** Contracts with the most calls over the last `days` days. */
 export async function indexedActiveContracts(
   limit: number,
   days = 1,
@@ -302,7 +304,8 @@ export async function indexedActiveContracts(
   const rows = await chQuery<{ contract_id: string; calls: string | number }>(
     `SELECT contract_id, count() AS calls FROM contract_calls
      WHERE closed_at >= now() - INTERVAL {days:UInt32} DAY
-     GROUP BY contract_id ORDER BY calls DESC LIMIT {limit:UInt32}`,
+     GROUP BY contract_id ORDER BY calls DESC LIMIT {limit:UInt32}
+     SETTINGS max_threads = 4`,
     { limit, days },
   );
   return rows.map((r) => ({ contractId: r.contract_id, calls: Number(r.calls) }));
@@ -316,7 +319,8 @@ export async function indexedTopContracts(
   const rows = await chQuery<{ contract_id: string; calls: string | number; callers: string | number }>(
     `SELECT contract_id, count() AS calls, uniq(caller) AS callers FROM contract_calls
      WHERE closed_at >= now() - INTERVAL {days:UInt32} DAY
-     GROUP BY contract_id ORDER BY calls DESC LIMIT {limit:UInt32}`,
+     GROUP BY contract_id ORDER BY calls DESC LIMIT {limit:UInt32}
+     SETTINGS max_threads = 4`,
     { days, limit },
   );
   return rows.map((r) => ({ contractId: r.contract_id, calls: Number(r.calls), callers: Number(r.callers) }));

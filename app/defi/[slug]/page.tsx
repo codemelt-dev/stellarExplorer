@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SearchX, Globe, ArrowLeft, Landmark, BarChart3, CalendarDays, CalendarRange, Boxes, Coins } from "lucide-react";
+import { SearchX, Globe, ArrowLeft, ArrowLeftRight, Landmark, BarChart3, CalendarDays, CalendarRange, Boxes, Coins } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ProtocolIcon } from "@/components/defi/ProtocolIcon";
+import { StellarMark } from "@/components/stellar/StellarMark";
 import { ProtocolCharts } from "@/components/defi/ProtocolCharts";
 import { DexTrades } from "@/components/defi/DexTrades";
 import { PoolActivityTable } from "@/components/defi/PoolActivityTable";
@@ -15,16 +16,25 @@ import {
   getProtocolDetail,
   getProtocolVolume,
   PROTOCOLS,
+  type TvlPoint,
 } from "@/lib/stellar/defi";
 import {
+  getOrderBookTotals,
+  getOrderBookTvlHistory,
+  getOrderBookVolumeHistory,
+  withLiveDay,
+} from "@/lib/stellar/orderBook";
+import {
+  CLASSIC_POOLS,
   getProtocolActivity,
   getProtocolTotals,
   getProtocolTvlHistory,
   getProtocolVolumeHistory,
   tvlSeriesOf,
   volumeSeriesOf,
+  type PoolProtocol,
 } from "@/lib/stellar/pools";
-import type { SorobanProtocol } from "@/lib/stellar/sorobanAmm";
+import { CLASSIC_AMM } from "@/lib/stellar/protocols";
 import { compactUsd, percentGap } from "@/lib/format";
 
 const usd = (n: number) => (n === 0 ? "$0" : n < 1 ? "<$1" : compactUsd(n));
@@ -35,7 +45,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const name = PROTOCOLS.find((p) => p.slug === slug)?.name ?? "Protocol";
+  const name = [...PROTOCOLS, CLASSIC_AMM].find((p) => p.slug === slug)?.name ?? "Protocol";
   return { title: `${name} · Stellar Explorer` };
 }
 
@@ -43,17 +53,30 @@ export async function generateMetadata({
 export const revalidate = 60;
 
 export function generateStaticParams() {
-  return PROTOCOLS.map((p) => ({ slug: p.slug }));
+  return [...PROTOCOLS, CLASSIC_AMM].map((p) => ({ slug: p.slug }));
 }
 
-// the Stellar DEX page lists the latest fills; the Soroban AMMs we index
-// show their own numbers, charts and activity from our indexer, with
-// DefiLlama beside them for comparison
-const HAS_TRADES = new Set(["stellar-dex"]);
-const INDEXED: Record<string, SorobanProtocol> = {
+// the order book and the AMMs we index show their own numbers, charts and
+// activity from our indexer, DefiLlama only in the comparison table where it
+// lists them (it doesn't list Stellar's own pools). The order book's activity
+// is its latest fills
+const ORDER_BOOK = "stellar-dex";
+const INDEXED: Record<string, PoolProtocol> = {
+  [CLASSIC_AMM.slug]: "classic",
   "aquarius-stellar": "aquarius",
   soroswap: "soroswap",
 };
+// how far back the latest activity reaches, as getProtocolActivity reads it
+const ACTIVITY_SPAN: Record<PoolProtocol, string> = { classic: "hour", aquarius: "3 days", soroswap: "3 days" };
+
+// our figures for a protocol the index measures: its pools, or the order book
+interface Own {
+  tvlUsd: number;
+  volume24hUsd: number;
+  trades24h: number;
+  tvl: TvlPoint[];
+  volume: Array<{ date: number; volume: number }>;
+}
 
 export default async function ProtocolPage({
   params,
@@ -62,14 +85,19 @@ export default async function ProtocolPage({
 }) {
   const { slug } = await params;
   const indexed = INDEXED[slug];
-  const [detail, volume, trades, onchain, totals, tvlDays, volumeDays] = await Promise.all([
+  const orderBook = slug === ORDER_BOOK;
+  const llamaListed = indexed !== "classic";
+  const [detail, volume, trades, onchain, totals, tvlDays, volumeDays, book, bookTvl, bookVolume] = await Promise.all([
     getProtocolDetail(slug),
-    getProtocolVolume(slug),
-    HAS_TRADES.has(slug) ? getDexTrades() : Promise.resolve(null),
+    llamaListed ? getProtocolVolume(slug) : Promise.resolve(null),
+    orderBook ? getDexTrades() : Promise.resolve(null),
     indexed ? getProtocolActivity(indexed) : Promise.resolve(null),
     indexed ? getProtocolTotals() : Promise.resolve(null),
     indexed ? getProtocolTvlHistory() : Promise.resolve(null),
     indexed ? getProtocolVolumeHistory() : Promise.resolve(null),
+    orderBook ? getOrderBookTotals() : Promise.resolve(null),
+    orderBook ? getOrderBookTvlHistory() : Promise.resolve(null),
+    orderBook ? getOrderBookVolumeHistory() : Promise.resolve(null),
   ]);
 
   if (!detail) {
@@ -84,13 +112,29 @@ export default async function ProtocolPage({
 
   const change = volume?.change1d ?? null;
   const ours = totals?.find((t) => t.protocol === indexed) ?? null;
-  // our own numbers lead whenever the indexer could value the protocol's pools
-  const own = indexed && ours && ours.pools > 0 ? ours : null;
-  const ownTvl = indexed && tvlDays ? tvlSeriesOf(tvlDays, indexed) : [];
-  const ownVolume = indexed && volumeDays ? volumeSeriesOf(volumeDays, indexed) : [];
+  // our own numbers lead whenever the indexer measures the protocol: pools it
+  // could value, or the order book
+  const pools = ours && ours.pools > 0 ? ours : null;
+  const own: Own | null =
+    indexed && pools
+      ? {
+          ...pools,
+          tvl: tvlDays ? tvlSeriesOf(tvlDays, indexed) : [],
+          volume: volumeDays ? volumeSeriesOf(volumeDays, indexed) : [],
+        }
+      : book
+        ? {
+            ...book,
+            tvl: withLiveDay(bookTvl ?? [], book.tvlUsd),
+            volume: bookVolume ?? [],
+          }
+        : null;
+  const ownVolume = own?.volume ?? [];
   const lastDays = (n: number) => ownVolume.slice(-n);
   const volumeOver = (n: number) => lastDays(n).reduce((sum, d) => sum + d.volume, 0);
   const daysCaption = (n: number) => (lastDays(n).length < n ? `${lastDays(n).length} days indexed so far` : "USD, from our index");
+  // we read only the most valuable classic pools, so a full read means there are more
+  const poolCount = (n: number) => `${n.toLocaleString("en-US")}${indexed === "classic" && n >= CLASSIC_POOLS ? "+" : ""}`;
 
   return (
     <div className="flex flex-col gap-5">
@@ -116,7 +160,11 @@ export default async function ProtocolPage({
       {/* identity */}
       <Card className="flex-row items-start gap-4 p-5">
         <span className="shrink-0 rounded-lg bg-surface-2 p-2">
-          <ProtocolIcon logo={detail.logo} name={detail.name} />
+          {detail.logo ? (
+            <ProtocolIcon logo={detail.logo} name={detail.name} />
+          ) : (
+            <StellarMark className="size-5 shrink-0 text-foreground" />
+          )}
         </span>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -151,19 +199,25 @@ export default async function ProtocolPage({
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
             <StatTile
               label="Total value locked"
-              info={`Both sides of every ${detail.name} pool we can value, at prices from our own pools. From our index.`}
+              info={
+                book
+                  ? "What open offers sell of XLM, USDC and other deeply traded assets, at prices from our own pools. An issuer's offers of its own asset don't count. From our index."
+                  : `Both sides of every ${detail.name} pool we can value, at prices from our own pools. From our index.`
+              }
               icon={Landmark}
               value={usd(own.tvlUsd)}
-              caption={detail.currentTvl ? `${percentGap(own.tvlUsd, detail.currentTvl)} vs DefiLlama` : `${own.pools} pools`}
+              caption={pools ? `${poolCount(pools.pools)} pools` : "on open offers"}
             />
             <StatTile
               label="Volume 24h"
-              info="Trades through those pools over the last 17,280 ledgers (about a day), valued at today's prices. From our index."
+              info={
+                book
+                  ? "Order book fills over the last 17,280 ledgers (about a day), valued at today's prices. An issuer handing over its own asset isn't counted. From our index."
+                  : "Trades through those pools over the last 17,280 ledgers (about a day), valued at today's prices. From our index."
+              }
               icon={BarChart3}
               value={usd(own.volume24hUsd)}
-              caption={
-                volume?.total24h ? `${percentGap(own.volume24hUsd, volume.total24h)} vs DefiLlama` : `${own.trades24h.toLocaleString("en-US")} trades`
-              }
+              caption={`${own.trades24h.toLocaleString("en-US")} trades`}
             />
             <StatTile
               label="Volume 7d"
@@ -222,12 +276,12 @@ export default async function ProtocolPage({
         <Card className="p-5">
           {own ? (
             <ProtocolCharts
-              tvl={ownTvl}
+              tvl={own.tvl}
               volume={ownVolume.length ? ownVolume : null}
-              tvlLabel={`${detail.name} value locked, from our index`}
+              tvlLabel={`${detail.name} ${book ? "value on offer" : "value locked"}, from our index`}
               volumeLabel={`${detail.name} daily volume, from our index`}
               noTvlMessage={`Not enough indexed days to chart ${detail.name}'s value yet.`}
-              noVolumeMessage={`No daily volume indexed for the ${detail.name} pools yet. It fills in over the next refreshes.`}
+              noVolumeMessage={`No daily volume indexed for ${book ? "the order book" : `the ${detail.name} pools`} yet. It fills in over the next refreshes.`}
             />
           ) : (
             <ProtocolCharts
@@ -243,49 +297,75 @@ export default async function ProtocolPage({
         </Card>
       </div>
 
-      {indexed && (
+      {(indexed || orderBook) && (
         <Card className="gap-3 p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-base font-semibold">From our index</h2>
             <span className="text-xs text-dim">
-              The numbers above are ours, live from the {detail.name} pools we can value, set against DefiLlama.{" "}
+              The numbers above are ours, live from {orderBook ? "the order book" : `the ${detail.name} pools we can value`}
+              {llamaListed ? ", set against DefiLlama." : ". DefiLlama doesn't list them."}{" "}
               <Link href="/defi" className="text-gold hover:underline underline-offset-4">
                 Compare every protocol
               </Link>
             </span>
           </div>
           {own ? (
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-              <div className="grid grid-cols-2 gap-3">
-                <StatTile
-                  label="Fees 24h"
-                  info="Each pool's volume times its fee. Pools whose fee we haven't read yet count as none."
-                  icon={Coins}
-                  value={usd(own.fees24hUsd)}
-                  caption="paid by traders to the pools"
-                />
-                <StatTile
-                  label="Pools"
-                  info="Pools with a side we can price and confirm is really held."
-                  icon={Boxes}
-                  value={own.pools.toLocaleString("en-US")}
-                  caption={`${own.trades24h.toLocaleString("en-US")} trades in 24h`}
-                />
+            <div className={llamaListed ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]" : "grid gap-4"}>
+              <div className={llamaListed ? "grid grid-cols-2 gap-3" : "grid grid-cols-2 gap-3 lg:grid-cols-4"}>
+                {pools ? (
+                  <>
+                    <StatTile
+                      label="Fees 24h"
+                      info="Each pool's volume times its fee. Pools whose fee we haven't read yet count as none."
+                      icon={Coins}
+                      value={usd(pools.fees24hUsd)}
+                      caption="paid by traders to the pools"
+                    />
+                    <StatTile
+                      label="Pools"
+                      info="Pools with a side we can price and confirm is really held."
+                      icon={Boxes}
+                      value={poolCount(pools.pools)}
+                      caption={`${pools.trades24h.toLocaleString("en-US")} trades in 24h`}
+                    />
+                  </>
+                ) : (
+                  book && (
+                    <>
+                      <StatTile
+                        label="Trades 24h"
+                        info="Order book fills over the last 17,280 ledgers (about a day), an issuer handing over its own asset left out."
+                        icon={ArrowLeftRight}
+                        value={book.trades24h.toLocaleString("en-US")}
+                        caption="fills on the order book"
+                      />
+                      <StatTile
+                        label="Markets 24h"
+                        info="Asset pairs with at least one fill over the last day, either way round."
+                        icon={Boxes}
+                        value={book.markets24h.toLocaleString("en-US")}
+                        caption="pairs that traded"
+                      />
+                    </>
+                  )
+                )}
               </div>
-              <ComparisonTable
-                rows={[
-                  { label: "Value locked", ours: own.tvlUsd, theirs: detail.currentTvl },
-                  { label: "Volume 24h", ours: own.volume24hUsd, theirs: volume?.total24h ?? null },
-                  { label: "Volume 7d", ours: ownVolume.length >= 7 ? volumeOver(7) : null, theirs: volume?.total7d ?? null },
-                ]}
-              />
+              {llamaListed && (
+                <ComparisonTable
+                  rows={[
+                    { label: "Value locked", ours: own.tvlUsd, theirs: detail.currentTvl },
+                    { label: "Volume 24h", ours: own.volume24hUsd, theirs: volume?.total24h ?? null },
+                    { label: "Volume 7d", ours: ownVolume.length >= 7 ? volumeOver(7) : null, theirs: volume?.total7d ?? null },
+                  ]}
+                />
+              )}
             </div>
           ) : (
             <EmptyState
               message={
                 totals
                   ? `None of the ${detail.name} pools we found could be valued right now.`
-                  : `Couldn't load ${detail.name} totals from the indexer. They'll be back on the next refresh.`
+                  : `Couldn't load ${orderBook ? "the order book" : detail.name} totals from the indexer. They'll be back on the next refresh.`
               }
             />
           )}
@@ -296,10 +376,10 @@ export default async function ProtocolPage({
       <Card id="activity" className="scroll-mt-24 gap-0 p-0">
         <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-5 pb-3">
           <h2 className="text-base font-semibold">
-            {HAS_TRADES.has(slug) ? "Latest trades" : indexed ? "Latest activity" : "On-chain activity"}
+            {orderBook ? "Latest trades" : indexed ? "Latest activity" : "On-chain activity"}
           </h2>
-          {HAS_TRADES.has(slug) && (
-            <span className="text-xs text-dim">Orderbook and AMM pool fills, refreshed every minute</span>
+          {orderBook && (
+            <span className="text-xs text-dim">Order book fills, refreshed every minute</span>
           )}
           {indexed && onchain && (
             <span className="text-xs text-dim">
@@ -311,14 +391,14 @@ export default async function ProtocolPage({
             </span>
           )}
         </div>
-        {HAS_TRADES.has(slug) ? (
+        {orderBook ? (
           <DexTrades trades={trades} />
         ) : !indexed ? (
           <EmptyState message={`${detail.name} activity isn't read from our indexer yet. The numbers above come from DefiLlama.`} />
         ) : !onchain ? (
           <EmptyState message={`Couldn't load ${detail.name} activity from the indexer. It'll be back on the next refresh.`} />
         ) : onchain.activity.length === 0 ? (
-          <EmptyState message={`No swaps, deposits or withdrawals in the ${detail.name} pools we track over the last 3 days.`} />
+          <EmptyState message={`No swaps, deposits or withdrawals in the ${detail.name} pools we track over the last ${ACTIVITY_SPAN[indexed]}.`} />
         ) : (
           <div className="flex flex-col gap-3 px-5 pb-4">
             <PoolActivityTable activity={onchain.activity} topId="activity" />

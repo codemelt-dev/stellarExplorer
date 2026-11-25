@@ -16,7 +16,7 @@ import { Time } from "@/components/stellar/Time";
 import { EmptyState } from "@/components/states/EmptyState";
 import type { DexTrade } from "@/lib/stellar/defi";
 
-// latest classic DEX fills, one row per trade; a row opens its transaction
+// the order book's latest fills, one row per trade; a row opens its transaction
 export function DexTrades({ trades }: { trades: DexTrade[] | null }) {
   if (!trades) {
     return <EmptyState message="Couldn't load recent mainnet trades. They'll be back on the next refresh." />;
@@ -32,8 +32,7 @@ export function DexTrades({ trades }: { trades: DexTrade[] | null }) {
           <TableHead>Action</TableHead>
           <TableHead>Trader</TableHead>
           <TableHead>Amount</TableHead>
-          <TableHead className="text-right">Price</TableHead>
-          <TableHead className="pr-4 text-right">Venue</TableHead>
+          <TableHead className="pr-4 text-right">Price</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -68,11 +67,8 @@ export function DexTrades({ trades }: { trades: DexTrade[] | null }) {
                   <Amount amount={t.counterAmount} assetCode={t.counterCode} assetIssuer={t.counterIssuer} />
                 </span>
               </TableCell>
-              <TableCell className="text-right font-mono whitespace-nowrap">
+              <TableCell className="pr-4 text-right font-mono whitespace-nowrap">
                 {t.price.toPrecision(5)}
-              </TableCell>
-              <TableCell className="pr-4 text-right text-dim">
-                {t.venue === "pool" ? "AMM pool" : "Orderbook"}
               </TableCell>
             </>
           );

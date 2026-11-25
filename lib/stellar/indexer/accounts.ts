@@ -114,6 +114,8 @@ export const OP_COLUMNS =
 // account_activity roles, a bitmask per transaction
 const OP_SOURCE = 4;
 const NAMED = 8;
+/** The roles behind the Trades and Contract calls tabs, set on every transaction since 2015. */
+export const TAB_ROLE = { trades: 64, contracts: 128 } as const;
 
 /** An operations row as OP_COLUMNS selects it. */
 export interface ChOpRow extends TxKey {
@@ -151,12 +153,14 @@ export interface IndexedOpsPage {
  * An account's operations: the ones it sent, or that name it (destination,
  * trustor, contract args...). Newest first, or the next ones up after `cursor`
  * when `newer`. Null when the indexer has none of the account's history there.
+ * With `role`, only the transactions marked with it are read, so a page reaches
+ * across the full history; none of them is an empty page, not null.
  */
 export async function indexedAccountOperations(
   account: string,
-  options: { cursor?: string; newer: boolean; limit: number; types?: ReadonlySet<string> },
+  options: { cursor?: string; newer: boolean; limit: number; types?: ReadonlySet<string>; role?: number },
 ): Promise<IndexedOpsPage | null> {
-  const { cursor, newer, limit, types } = options;
+  const { cursor, newer, limit, types, role } = options;
   const at = cursor ? parseCursor(cursor) : null;
   if (cursor && !at) return null;
 
@@ -190,11 +194,12 @@ export async function indexedAccountOperations(
     const txs = await chQuery<TxKey & { roles: number }>(
       `SELECT ledger_sequence, tx_index, roles FROM account_activity
        WHERE account = {account:String}
+         ${role ? "AND bitAnd(roles, {role:UInt8}) != 0" : ""}
          AND ledger_sequence ${newer ? ">=" : "<="} {ledger:UInt32}
          AND (ledger_sequence, tx_index) ${newer ? ">=" : "<="} ({ledger:UInt32}, {tx:UInt32})
        ORDER BY account ${dir}, ledger_sequence ${dir}, tx_index ${dir}
        LIMIT {scan:UInt32}`,
-      { account, ledger: txBound.ledger, tx: txBound.txIndex, scan: SCAN_TXS[round] },
+      { account, ledger: txBound.ledger, tx: txBound.txIndex, scan: SCAN_TXS[round], ...(role ? { role } : {}) },
     );
     if (txs.length < SCAN_TXS[round]) scannedAll = true;
     if (txs.length === 0) break;
@@ -243,7 +248,7 @@ export async function indexedAccountOperations(
     txBound = { ledger, txIndex };
     opBound = newer ? txCursor(ledger, txIndex + 1) : txCursor(ledger, txIndex);
   }
-  if (!scannedAny) return null;
+  if (!scannedAny && !role) return null;
 
   const full = found.length === limit;
   const records = await toOpRecords(found);
