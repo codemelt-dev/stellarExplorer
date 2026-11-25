@@ -40,7 +40,7 @@ One exception to that path: on testnet, or when the indexer fails, the browser s
 | Analytics | `/analytics` | the network per complete UTC day from our indexer: transactions (classic and Soroban), failure rate, operations and their types, active and new accounts, fees (classic and Soroban), contract calls, new contracts and token transfers over 7, 30 or 90 days, the latest day against its 7-day average, the most called contracts of the week, and every number in a table |
 | Search | `/search` | `G`/`M`/`C` addresses, transaction hashes, ledger numbers, asset codes and federation addresses (`name*domain`, resolved in the browser through the domain's `stellar.toml`) |
 
-The site opens on mainnet. The header switches to testnet and back, and connects a wallet read-only (Freighter, xBull). Analytics starts where the indexer does (6 October 2026) and reaches further back as its history backfill lands.
+The site opens on mainnet. The header switches to testnet and back, and connects a wallet read-only (Freighter, xBull). The indexer holds the network's full history, from genesis (30 September 2015) to the latest ledger, so analytics, events and account history all come from it.
 
 The humanizer covers all 27 operation types (24 classic, plus `invoke_host_function`, `extend_footprint_ttl` and `restore_footprint`), with a safe fallback for anything unknown. Amounts stay `bigint` from the wire to the screen; no stroop math runs in floating point.
 
@@ -49,12 +49,12 @@ The humanizer covers all 27 operation types (24 classic, plus `invoke_host_funct
 | Data | Mainnet | Testnet |
 |---|---|---|
 | Ledgers, recent transactions | indexer (ClickHouse); Horizon fallback | Horizon |
-| Contracts: summary, storage, interface, events, WASM | indexer (ClickHouse and PostgREST); RPC fallback. Events go back to go-live, 100 at a time: older batches load through `/api/contracts/[id]/events` when the last page is reached | Stellar RPC (recent events only) |
+| Contracts: summary, storage, interface, events, WASM | indexer (ClickHouse and PostgREST); RPC fallback. Events go back to the contract's first event, 100 at a time: older batches load through `/api/contracts/[id]/events` when the last page is reached | Stellar RPC (recent events only) |
 | Asset supply and holder count | indexer; Horizon fallback | Horizon |
 | Top holders, holder map links, asset and contract directories | indexer only | not available |
 | Accounts: balances, signers, flags, data entries | indexer (PostgREST); Horizon fallback | Horizon |
-| Account history and "Your activity" | indexer (ClickHouse) through `/api/accounts/[id]/activity` for the latter; Horizon for history before 6 October 2026 and as fallback | Horizon |
-| Transaction detail: operations, contract calls, return values, events, balance changes | indexer (ClickHouse); Horizon, with RPC and the AWS ledger archive for Soroban results, for transactions before 6 October 2026 and as fallback | Horizon, with RPC for Soroban results |
+| Account history and "Your activity" | indexer (ClickHouse) through `/api/accounts/[id]/activity` for the latter; Horizon fallback | Horizon |
+| Transaction detail: operations, contract calls, return values, events, balance changes | indexer (ClickHouse); Horizon, with RPC and the AWS ledger archive for Soroban results, as fallback | Horizon, with RPC for Soroban results |
 | Live ledger pulse | indexer, polled every second through `/api/ledgers/live`; Horizon SSE fallback | Horizon SSE |
 | Live operations feed | indexer, polled every 20 seconds through `/api/operations/live`; Horizon SSE fallback | Horizon SSE |
 | Network growth, account totals | indexer; stellar.expert fallback | same (always mainnet figures) |
@@ -83,7 +83,7 @@ Every indexer read logs one line on the server, in production too:
 
 `indexer` means the indexer answered. `fallback` means the old source did, and why. `[horizon] tx raw` is the XDR tab, the only Horizon read on an indexer-served transaction page. On Vercel: project, Logs, search `[indexer]`. Vercel keeps logs for a short time, so export them during a review window.
 
-The indexed history starts at ledger 64,806,592 (6 October 2026), the indexer's go-live. Backfilling it to genesis is the next milestone.
+The indexed history covers every ledger from genesis (ledger 2, 30 September 2015) to the network tip. Live indexing started at ledger 64,806,592 (6 October 2026); everything before it was backfilled.
 
 ## Layout
 
@@ -151,7 +151,7 @@ See [the coverage and fixture guide](e2e/README.md) for the scenarios and how to
 
 ## Known limitations
 
-- The indexer covers mainnet only, from 6 October 2026; the full history backfill is next.
+- The indexer covers mainnet only.
 - Testnet rides public endpoints and their rate limits.
 
 ## Related
