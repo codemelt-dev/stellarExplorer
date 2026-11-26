@@ -111,10 +111,11 @@ function clickhouseResponse(
     body.includes("FROM trades") &&
     (body.includes("GROUP BY hour") ||
       body.includes("seller, buyer, sold_asset") ||
-      body.includes("venue = 'orderbook'"))
+      body.includes("venue = 'orderbook'") ||
+      body.includes("IN {counters:Array(String)}"))
   ) {
-    // Market decoration, latest DEX fills and the order book's 24h fills have
-    // no activity in the base corpus.
+    // Market decoration, latest DEX fills, the order book's 24h fills and the
+    // asset history's daily fills have no activity in the base corpus.
     rows = [];
   } else if (body.includes("FROM assets") && body.includes("on_offers > 0")) {
     // Nothing is on offer in the order book, so its value locked is zero.

@@ -183,6 +183,48 @@ for (const code of ["USDQ", "BOND"]) {
   });
 }
 
+test("USDQ history charts holders, supply and volume per day; the range switches", async ({
+  page,
+}) => {
+  await page.goto(`/asset/USDQ-${ISSUER}`);
+  const history = page
+    .getByRole("main")
+    .getByRole("region", { name: "History" });
+  // the latest day matches the tiles
+  await expect(tile(page, "Holders")).toContainText("1,200");
+  await expect(tile(page, "Supply")).toContainText("10.0M");
+  await expect(
+    history.getByRole("img", {
+      name: "Holders per day over 30 days, latest 1,200",
+    }),
+  ).toBeVisible();
+  await expect(
+    history.getByRole("img", {
+      name: "Supply in USDQ per day over 30 days, latest 10.0M USDQ",
+    }),
+  ).toBeVisible();
+  await expect(
+    history.getByRole("img", {
+      name: "Volume against XLM per day over the last 30 days, latest 25.0K XLM",
+    }),
+  ).toBeVisible();
+  await expect(
+    history.getByText("750.0K XLM total", { exact: true }),
+  ).toBeVisible();
+
+  await history.getByRole("button", { name: "All", exact: true }).click();
+  await expect(
+    history.getByRole("img", {
+      name: "Holders per day over 100 days, latest 1,200",
+    }),
+  ).toBeVisible();
+  await expect(
+    history.getByRole("img", {
+      name: "Supply in USDQ per day over 100 days, latest 10.0M USDQ",
+    }),
+  ).toBeVisible();
+});
+
 test("holder hover or first tap shows balance/share; click or second tap opens the account", async ({
   page,
   isMobile,

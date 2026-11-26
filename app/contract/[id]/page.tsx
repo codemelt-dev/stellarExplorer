@@ -15,6 +15,7 @@ import { Time } from "@/components/stellar/Time";
 import { EmptyState } from "@/components/states/EmptyState";
 import { ErrorState } from "@/components/states/ErrorState";
 import { PagedList } from "@/components/layout/PagedList";
+import { HistorySection } from "@/components/asset/HistorySection";
 import { HolderSections } from "@/components/asset/HolderSections";
 import { activeNetwork } from "@/lib/stellar/network";
 import {
@@ -272,6 +273,7 @@ export default async function ContractPage({
               </span>
             </Card>
           )}
+          <HistorySection assetId={id} code={symbol} decimals={decimals} countsSupply={tokenStats.complete} />
           <HolderSections
             identity={{ kind: "contract", contractId: id }}
             holders={holders}

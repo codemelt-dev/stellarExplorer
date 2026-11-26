@@ -43,6 +43,37 @@ export async function indexedPairHours(base: string, counter: string, days: numb
   );
 }
 
+export interface ChDayFills {
+  sold_asset: string;
+  bought_asset: string;
+  trades: string | number;
+  /** Base units, as digit strings. */
+  sold: string;
+  bought: string;
+}
+
+/**
+ * One UTC day (YYYY-MM-DD) of DEX fills with one of `counters` on a side,
+ * order book and pools, per pair and direction. trades is sorted by ledger,
+ * so the day's ledgers are found in `ledgers` first; every asset's day comes
+ * from this one read, in about half a second.
+ */
+export async function indexedDayFills(day: string, counters: string[]): Promise<ChDayFills[]> {
+  return chQuery<ChDayFills>(
+    `SELECT sold_asset, bought_asset, count() AS trades,
+            toString(sum(sold_amount)) AS sold, toString(sum(bought_amount)) AS bought
+     FROM trades
+     WHERE ledger_sequence BETWEEN
+           (SELECT ifNull(minOrNull(sequence), {max:UInt32}) FROM ledgers WHERE closed_at >= {day:Date})
+       AND (SELECT ifNull(minOrNull(sequence), {max:UInt32}) FROM ledgers WHERE closed_at >= {day:Date} + 1) - 1
+       AND (sold_asset IN {counters:Array(String)} OR bought_asset IN {counters:Array(String)})
+       AND sold_amount > 0 AND bought_amount > 0
+     GROUP BY sold_asset, bought_asset
+     SETTINGS max_threads = 4`,
+    { day, max: 0xffffffff, counters: `[${counters.map((c) => `'${c}'`).join(",")}]` },
+  );
+}
+
 export interface IndexedOnOffers {
   /** Base units in holders' open offers today, null when the asset isn't indexed. */
   today: string | null;

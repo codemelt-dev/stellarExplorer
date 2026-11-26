@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Coins, DollarSign, Globe, PieChart, SearchX, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { HistorySection } from "@/components/asset/HistorySection";
 import { HolderSections, percent } from "@/components/asset/HolderSections";
 import { MarketSection } from "@/components/asset/MarketSection";
 import { Address } from "@/components/stellar/Address";
@@ -196,6 +197,10 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
       )}
 
       <MarketSection assetId={decodeURIComponent(id)} code={identity.code} mainnet={network.id === "mainnet"} />
+
+      {network.id === "mainnet" && (
+        <HistorySection assetId={decodeURIComponent(id)} code={identity.code} decimals={7} />
+      )}
 
       <HolderSections
         identity={identity}

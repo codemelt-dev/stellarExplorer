@@ -51,6 +51,26 @@ export async function indexedAsset(asset: string): Promise<IndexedAsset | null> 
   return row ? toAsset(row) : null;
 }
 
+export interface ChAssetSnapshot {
+  day: string;
+  holders: string | number;
+  /** Base units as a digit string. */
+  supply: string;
+  computed_at: string;
+}
+
+/**
+ * An asset's holders and supply at the end of each UTC day, oldest first,
+ * since 8 October 2026. The table is sorted by asset, so this is a short read.
+ */
+export async function indexedAssetSnapshots(asset: string): Promise<ChAssetSnapshot[]> {
+  return chQuery<ChAssetSnapshot>(
+    `SELECT toString(date) AS day, holders, toString(supply) AS supply, toString(computed_at) AS computed_at
+     FROM asset_snapshots WHERE asset = {asset:String} ORDER BY date`,
+    { asset },
+  );
+}
+
 export interface IndexedToken extends IndexedAsset {
   /** False when the index misses some of the token's transfers: its balances count only the ones it has. */
   complete: boolean;
