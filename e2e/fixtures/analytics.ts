@@ -69,6 +69,24 @@ export const tokenHolders = allHolders.map((h) => ({
   balance: String(BigInt(h.balance) * 100n),
 }));
 export const tokenIds = [STANDARD_TOKEN, INCOMPLETE_TOKEN, CUSTOM_TOKEN];
+// USDQ's last 100 daily snapshots climb to today's 1,200 holders and
+// 10,000,000 USDQ of supply, so the latest day matches the tiles.
+export const stableSnapshots = Array.from({ length: 100 }, (_, i) => ({
+  day: utcDay(i - 100),
+  holders: String(1101 + i),
+  supply: String(BigInt(9_901 + i) * 10_000_000_000n),
+  computed_at: `${utcDay(i - 99)} 00:15:00`,
+}));
+// Every day: 5,000 USDQ sold for 25,000 XLM in 3 fills, nothing against USDC.
+export const stableDayFills = [
+  {
+    sold_asset: STABLE_ASSET,
+    bought_asset: "native",
+    trades: "3",
+    sold: "50000000000",
+    bought: "250000000000",
+  },
+];
 export const holderAssets = ["native", STABLE_ASSET, RWA_ASSET, ...tokenIds];
 
 const topic = (address: string) => JSON.stringify({ address });

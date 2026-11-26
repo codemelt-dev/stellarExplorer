@@ -53,7 +53,7 @@ export function HistorySection({
   }, [fetchHistory]);
 
   return (
-    <Card className="gap-5 p-5" aria-busy={load.state === "loading"}>
+    <Card role="region" aria-label="History" className="gap-5 p-5" aria-busy={load.state === "loading"}>
       {load.state === "failed" ? (
         <>
           <Heading />
@@ -157,7 +157,7 @@ function HistoryBody({
           info="Everything in circulation at the end of the day, in accounts, pools, contracts and unclaimed balances."
         >
           {!countsSupply ? (
-            <EmptyState message="Our index is missing some of this token's transfers, so its supply isn't counted." />
+            <EmptyState message="Some of this token's transfers aren't in our index, so its supply isn't counted." />
           ) : count(supply) < 2 ? (
             <EmptyState message={tooFew} />
           ) : (

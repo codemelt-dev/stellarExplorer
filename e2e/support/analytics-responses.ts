@@ -6,6 +6,7 @@ import {
   tokenHolders,
   tokenIds,
   holderAssets,
+  STABLE_ASSET,
   STABLE_SAC,
   RWA_SAC,
   STANDARD_TOKEN,
@@ -25,6 +26,8 @@ import {
   instanceHash,
   tokenInstance,
   tokenWasm,
+  stableSnapshots,
+  stableDayFills,
   utcDay,
 } from "../fixtures/analytics";
 import { ACCOUNT, ISSUER, WASM_HASH } from "../fixtures/stellar";
@@ -160,6 +163,12 @@ export function analyticsClickhouse(
     return rows([]);
   if (sql.includes("FROM trades") && sql.includes("GROUP BY hour"))
     return rows([]);
+  // History section: USDQ has daily snapshots, and every day's fills
+  // against XLM and USDC hold the same USDQ trades.
+  if (sql.includes("FROM asset_snapshots") && sql.includes("computed_at"))
+    return rows(asset === STABLE_ASSET ? stableSnapshots : []);
+  if (sql.includes("FROM trades") && param("counters"))
+    return rows(stableDayFills);
   if (sql.includes("FROM asset_snapshots")) return rows([]);
   // Price decoration of the synthetic stablecoin/RWA has no market yet.
   if (sql.includes("FROM state_offers")) return rows([]);
